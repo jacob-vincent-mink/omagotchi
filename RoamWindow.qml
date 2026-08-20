@@ -319,7 +319,8 @@ PanelWindow {
     height: root.spriteSize
     x: root.petX
     y: root.petY - height
-    rotation: root.action === "climb" ? -90 : 0
+    rotation: root.action === "climb" ? -90 : (root.action === "held" ? 12 : 0)
+    Behavior on rotation { NumberAnimation { duration: 150 } }
 
     readonly property bool asleep: root.petService && root.petService.sleeping
     frames: asleep || root.action === "idle"
@@ -329,12 +330,54 @@ PanelWindow {
     tint: Color.foreground
     mirrored: root.facingLeft
 
+    // Click = pet; press-and-move = pick it up by the scruff and carry it.
+    // Once pressed, the Wayland implicit grab keeps pointer events coming to
+    // this surface even when the cursor leaves the click mask, so the drag
+    // survives crossing other windows.
     MouseArea {
+      id: grabArea
       anchors.fill: parent
-      cursorShape: Qt.PointingHandCursor
-      onClicked: {
-        if (root.petService) root.petService.petThePet()
-        heart.pop()
+      cursorShape: root.action === "held" ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+
+      property real grabDx: 0
+      property real grabDy: 0
+      property real pressGlobalX: 0
+      property real pressGlobalY: 0
+      property bool dragging: false
+
+      onPressed: function(mouse) {
+        var p = mapToItem(root.contentItem, mouse.x, mouse.y)
+        pressGlobalX = p.x
+        pressGlobalY = p.y
+        grabDx = p.x - root.petX
+        grabDy = p.y - (root.petY - root.spriteSize)
+        dragging = false
+      }
+      onPositionChanged: function(mouse) {
+        if (!pressed) return
+        var p = mapToItem(root.contentItem, mouse.x, mouse.y)
+        if (!dragging) {
+          if (Math.abs(p.x - pressGlobalX) < 8 && Math.abs(p.y - pressGlobalY) < 8) return
+          dragging = true
+          root.action = "held"
+          root.pendingClimb = null
+          root.support = null
+        }
+        root.petX = Math.max(0, Math.min(root.width - root.spriteSize, p.x - grabDx))
+        root.petY = Math.max(root.headroom,
+          Math.min(root.floorY, p.y - grabDy + root.spriteSize))
+      }
+      onReleased: {
+        if (dragging) {
+          dragging = false
+          // A small lift so a drop aimed at a window border lands on it
+          // instead of slipping just past its top edge.
+          root.petY = Math.max(root.headroom, root.petY - 6)
+          root.startFall()
+        } else {
+          if (root.petService) root.petService.petThePet()
+          heart.pop()
+        }
       }
     }
   }

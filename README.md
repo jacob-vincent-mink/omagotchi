@@ -46,6 +46,10 @@ from the Hyprland IPC through Quickshell; the overlay is fully click-through
 except the pet itself, which you can pet mid-stroll. Roaming keeps boredom
 down, but it is tiring — an exhausted pet naps on the spot, wherever it is.
 
+You can also **pick it up**: press and drag to carry it by the scruff (legs
+wiggling in protest), then drop it anywhere — on a window top, on the floor —
+and it falls and lands where you left it. A plain click is still a petting.
+
 The sprites are 16×16, one-bit, and tinted live with your theme's colors —
 switch themes and the pet molts.
 
