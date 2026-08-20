@@ -418,9 +418,9 @@ PanelWindow {
   // The shared emote bubble: one 16x16 white glyph per state, floating above
   // the head, tinted urgent when the need turns critical. A missing emote
   // file simply hides the bubble (Image.Error), so they can land one by one.
+  // While stunned, the complaint bubble yields to the orbiting stars.
   readonly property string emoteName: {
-    if (!petService) return ""
-    if (action === "stunned") return "emote_stun"
+    if (!petService || action === "stunned") return ""
     return petService.emoteName
   }
 
@@ -458,6 +458,57 @@ PanelWindow {
       colorization: 1
       // Same tint as the pet, one creature one color.
       colorizationColor: Color.foreground
+    }
+  }
+
+  // Knocked-out stars: three copies of the star sprite orbiting the head on a
+  // flattened ellipse, phased 120° apart. The one swinging "behind" the head
+  // shrinks and dims for depth. Pure code — the artist only drew one star.
+  Item {
+    id: stunStars
+    visible: root.action === "stunned"
+
+    property real angle: 0
+    NumberAnimation on angle {
+      running: stunStars.visible
+      from: 0; to: 360
+      duration: 1100
+      loops: Animation.Infinite
+    }
+
+    Repeater {
+      model: 3
+
+      Item {
+        id: star
+        required property int index
+        readonly property real theta: (stunStars.angle + star.index * 120) * Math.PI / 180
+        readonly property real depth: (Math.sin(theta) + 1) / 2 // 0 = behind, 1 = front
+
+        width: Math.round(root.spriteSize * 0.35)
+        height: width
+        x: root.petX + root.spriteSize / 2 + Math.cos(theta) * root.spriteSize * 0.6 - width / 2
+        y: root.petY - root.spriteSize - height / 2 + Math.sin(theta) * root.spriteSize * 0.16
+        opacity: 0.4 + 0.6 * depth
+        scale: 0.7 + 0.3 * depth
+
+        Image {
+          id: starImage
+          anchors.fill: parent
+          source: Qt.resolvedUrl("assets/sprites/emote_stunned.png")
+          smooth: false
+          mipmap: false
+          fillMode: Image.PreserveAspectFit
+          visible: false
+        }
+
+        MultiEffect {
+          anchors.fill: starImage
+          source: starImage
+          colorization: 1
+          colorizationColor: Color.foreground
+        }
+      }
     }
   }
 

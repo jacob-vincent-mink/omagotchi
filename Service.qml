@@ -50,6 +50,7 @@ Item {
   property real dirtLevel: 0
   property real tirednessLevel: 0
   property real boredomLevel: 0
+  property real lonelinessLevel: 0
   property bool sleeping: false
 
   readonly property var knownForms: ["egg", "baby", "child", "teen_neat",
@@ -78,11 +79,10 @@ Item {
   readonly property real dirtiness: Math.max(0, Math.min(100, dirtLevel))
   readonly property real tiredness: Math.max(0, Math.min(100, tirednessLevel))
   readonly property real boredom: Math.max(0, Math.min(100, boredomLevel))
-  // A day without affection = lonely.
-  readonly property real loneliness: {
-    var hours = lastPetMs > 0 ? Math.max(0, (nowMs - lastPetMs) / 3600000) : 0
-    return Math.min(100, hours / 24 * 100)
-  }
+  // Affection is a cuddle-session need: it fills over active time and each
+  // petting only takes a bite out of it — a truly lonely pet wants a real
+  // fuss, not a single tap.
+  readonly property real loneliness: Math.max(0, Math.min(100, lonelinessLevel))
 
   readonly property bool roaming: canRoam && settings.roamEnabled === true
 
@@ -211,6 +211,9 @@ Item {
     boredomLevel = roaming
       ? Math.max(0, boredomLevel - 2.0)
       : Math.min(100, boredomLevel + 0.45 * rates.fun)
+
+    // Full in ~14 active hours; each petting takes 10 off.
+    lonelinessLevel = Math.min(100, lonelinessLevel + 0.12)
   }
 
   // --- growth ----------------------------------------------------------------
@@ -281,6 +284,7 @@ Item {
     dirtLevel = 0
     tirednessLevel = 0
     boredomLevel = 0
+    lonelinessLevel = 0
     sleeping = false
     hatchedAtMs = Date.now()
     lastPetMs = hatchedAtMs
@@ -291,6 +295,7 @@ Item {
   function petThePet() {
     lastPetMs = Date.now()
     nowMs = lastPetMs
+    lonelinessLevel = Math.max(0, lonelinessLevel - 10)
     boredomLevel = Math.max(0, boredomLevel - 10)
     flushPet()
   }
@@ -322,6 +327,7 @@ Item {
       dirtLevel: dirtLevel,
       tirednessLevel: tirednessLevel,
       boredomLevel: boredomLevel,
+      lonelinessLevel: lonelinessLevel,
       sleeping: sleeping
     }, null, 2) + "\n")
   }
@@ -351,6 +357,15 @@ Item {
       dirtLevel = Number(pet.dirtLevel) > 0 ? Number(pet.dirtLevel) : 0
       tirednessLevel = Number(pet.tirednessLevel) > 0 ? Number(pet.tirednessLevel) : 0
       boredomLevel = Number(pet.boredomLevel) > 0 ? Number(pet.boredomLevel) : 0
+      if (pet.lonelinessLevel !== undefined) {
+        lonelinessLevel = Number(pet.lonelinessLevel) > 0 ? Number(pet.lonelinessLevel) : 0
+      } else {
+        // Soft migration from the old wall-clock model: seed the stored level
+        // from the time since the last petting.
+        var hours = Number(pet.lastPetMs) > 0
+          ? Math.max(0, (Date.now() - Number(pet.lastPetMs)) / 3600000) : 0
+        lonelinessLevel = Math.min(100, hours / 24 * 100)
+      }
       sleeping = pet.sleeping === true
     } catch (petError) { hatchedAtMs = 0; lastPetMs = 0 }
     // A corrupt or hand-edited form falls back to a fresh egg rather than a
