@@ -39,7 +39,7 @@ PanelWindow {
     x: 0
 
     readonly property bool walking: moveAnimation.running
-    frames: walking ? ["walk_a.png", "walk_b.png"] : ["idle_a.png", "idle_b.png"]
+    frames: walking ? root.petService.walkFrames : root.petService.idleFrames
     frameMs: walking ? 220 : 500
     tint: Color.foreground
 

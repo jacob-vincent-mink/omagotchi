@@ -63,7 +63,9 @@ Panel {
             anchors.centerIn: parent
             width: Style.space(80)
             height: Style.space(80)
-            frames: ["idle_a.png", "idle_b.png"]
+            frames: root.ready
+              ? root.petService.idleFrames
+              : ["egg_idle_a.png", "egg_idle_b.png"]
             frameMs: 600
             tint: Color.accent
           }
@@ -110,6 +112,20 @@ Panel {
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           wrapMode: Text.Wrap
+          renderType: Text.NativeRendering
+        }
+
+        Text {
+          width: parent.width
+          horizontalAlignment: Text.AlignHCenter
+          text: root.ready
+            ? root.petService.stageLabel + " · "
+              + Math.floor(root.petService.ageMinutes / 60) + "h"
+              + Math.floor(root.petService.ageMinutes % 60) + "m old"
+            : ""
+          color: Qt.alpha(root.foreground, 0.6)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
           renderType: Text.NativeRendering
         }
 
@@ -191,9 +207,12 @@ Panel {
           Button {
             text: root.ready && root.petService.settings.roamEnabled === true
               ? "Come home" : "Go play"
-            tooltipText: "Let the pet roam along the bottom of the screen"
+            tooltipText: root.ready && !root.petService.canRoam
+              ? "Too young to go out alone"
+              : "Let the pet roam along the bottom of the screen"
             fontFamily: root.fontFamily
-            enabled: root.ready
+            enabled: root.ready && root.petService.canRoam
+            opacity: enabled ? 1 : 0.4
             onClicked: root.petService.setRoamEnabled(
               !(root.petService.settings.roamEnabled === true))
           }

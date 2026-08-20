@@ -81,9 +81,13 @@ BarWidget {
 
       PetSprite {
         anchors.fill: parent
-        frames: ["idle_a.png", "idle_b.png"]
+        frames: root.serviceReady
+          ? root.petService.idleFrames
+          : ["egg_idle_a.png", "egg_idle_b.png"]
         // An unhappy pet fidgets in the bar to catch the eye.
-        frameMs: root.serviceReady && root.petService.mood !== "happy" ? 350 : 900
+        frameMs: root.serviceReady
+          && root.petService.mood !== "happy" && root.petService.mood !== "egg"
+          ? 350 : 900
         tint: button.foreground
       }
     }

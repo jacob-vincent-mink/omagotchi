@@ -15,6 +15,25 @@ Arch signal, and every care action is real system care.
 Needs rise with time and package churn, never with hardware performance: the
 pet plays the same on a ten-year-old laptop as on a fresh build.
 
+## Growth
+
+The pet grows through the classic stages — egg, baby, child, teen, adult — as
+a tribute to the 1997 growth charts (structure only: every creature here is
+original). Age counts **active shell minutes**, so a machine that sleeps does
+not starve anyone, and the branch you get depends on your average care over
+the stage:
+
+- The egg hatches after 5 minutes; the baby becomes a child after 65 more
+  (yes, those numbers).
+- After ~8 active hours the child becomes a **neat teen** (average care ≥ 55)
+  or a **scruffy teen**.
+- After ~16 more, the teen settles into one of three adults: the **ace**, the
+  **easygoing one**, or the **gremlin** — a scruffy teen can never quite reach
+  ace, just like in the old charts.
+
+Evolutions are announced with a desktop notification. Care average resets at
+each stage, so a rough childhood can still turn into a fine adulthood.
+
 Click "Go play" and the pet leaves its panel to wander along the bottom edge
 of the screen (above your bar if the bar lives down there — layer-shell
 exclusive zones handle that automatically). The strip is fully click-through
