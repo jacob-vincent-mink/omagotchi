@@ -150,6 +150,26 @@ Panel {
             }
           }
 
+          // Same recipe as the roaming view: three letters and a slow pulse.
+          Text {
+            id: panelZzz
+            visible: !root.petIsOut && root.ready && root.petService.sleeping
+            text: "z z Z"
+            color: Color.accent
+            font.pixelSize: Style.space(16)
+            anchors.left: bigPet.right
+            anchors.leftMargin: -Style.space(6)
+            anchors.bottom: bigPet.top
+            anchors.bottomMargin: -Style.space(12)
+
+            SequentialAnimation {
+              running: panelZzz.visible
+              loops: Animation.Infinite
+              NumberAnimation { target: panelZzz; property: "opacity"; from: 0.25; to: 1; duration: 1300 }
+              NumberAnimation { target: panelZzz; property: "opacity"; from: 1; to: 0.25; duration: 1300 }
+            }
+          }
+
           // The emote bubble, floating at the pet's shoulder when it is home.
           Item {
             id: panelEmote

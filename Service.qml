@@ -105,18 +105,28 @@ Item {
     onTriggered: root.transientAnim = ""
   }
 
-  // The shared emote bubble to float above the pet, one glyph per state.
+  // The shared emote bubbles, one glyph per complaining need. When several
+  // needs complain at once the bubble cycles through them every few seconds.
   // Views hide the bubble when the file doesn't exist yet.
-  readonly property string emoteName: {
-    if (!initialized || sleeping || stage === "egg") return ""
-    switch (stateAnim) {
-    case "hungry": return "emote_hungry"
-    case "dirty": return "emote_dirty"
-    case "sleepy": return "emote_sleepy"
-    case "bored": return "emote_bored"
-    case "sad": return "emote_sad"
-    default: return ""
-    }
+  readonly property var activeEmotes: {
+    if (!initialized || sleeping || stage === "egg") return []
+    var list = []
+    if (hunger >= 60) list.push("emote_hungry")
+    if (dirtiness >= 60) list.push("emote_dirty")
+    if (tiredness >= 60) list.push("emote_sleepy")
+    if (boredom >= 60) list.push("emote_bored")
+    if (loneliness >= 60) list.push("emote_sad")
+    return list
+  }
+  property int emoteCycle: 0
+  readonly property string emoteName: activeEmotes.length === 0
+    ? "" : activeEmotes[emoteCycle % activeEmotes.length]
+
+  Timer {
+    interval: 3000
+    running: root.initialized && root.activeEmotes.length > 1
+    repeat: true
+    onTriggered: root.emoteCycle += 1
   }
 
   // The idle-state animation views should show (falls back to plain idle in
