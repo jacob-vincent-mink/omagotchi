@@ -79,18 +79,23 @@ Panel {
     focusTarget: keyCatcher
     padding: Style.space(14)
     contentWidth: panel.fittedContentWidth(Style.space(410))
-    contentHeight: panel.cappedContentHeight(Style.space(440))
+    // The card sizes itself from the actual content, plus breathing room at
+    // the bottom. fittedContentHeight adds the card's own padding and border
+    // inset — contentHeight includes them, so feeding it a raw content height
+    // silently shaves that inset off the content area instead.
+    contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight + Style.space(16))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      // Breathing room under the last hint line.
-      anchors.bottomMargin: Style.space(14)
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
       Column {
-        anchors.fill: parent
+        id: contentColumn
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         spacing: Style.space(12)
 
         // --- the pet -------------------------------------------------------
