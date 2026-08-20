@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell
 import qs.Commons
 import qs.Ui
 
@@ -9,7 +10,22 @@ import qs.Ui
 Panel {
   id: root
   moduleName: "slcode777.omagotchi"
-  manageIpc: false
+
+  // One panel instance exists per bar; only the largest screen's instance
+  // claims the IPC target, so `qs ipc call slcode777.omagotchi toggle` acts
+  // on a predictable panel instead of whichever instance registered first.
+  readonly property var panelScreen: anchorItem && anchorItem.QsWindow.window
+    ? anchorItem.QsWindow.window.screen : null
+  readonly property var mainScreen: {
+    var best = null
+    var screens = Quickshell.screens
+    for (var i = 0; i < screens.length; i++) {
+      if (!best || screens[i].width * screens[i].height > best.width * best.height)
+        best = screens[i]
+    }
+    return best
+  }
+  ipcTarget: panelScreen && panelScreen === mainScreen ? moduleName : ""
 
   property var anchorItem: null
   property var hostWidget: null
@@ -24,16 +40,35 @@ Panel {
     { label: "Hunger", value: petService.hunger,
       hint: petService.pendingUpdates > 0
         ? "rising faster: " + petService.pendingUpdates + " updates pending"
-        : "rises over time" },
+        : "rises over time",
+      action: "feed", actionLabel: "Feed",
+      actionTip: "A good meal, hunger back to zero" },
     { label: "Hygiene", value: petService.dirtiness,
       hint: petService.orphanCount > 0
         ? "rising faster: " + petService.orphanCount + " orphaned packages"
-        : "rises over time" },
+        : "rises over time",
+      action: "clean", actionLabel: "Clean",
+      actionTip: "Bath time, hygiene back to zero" },
     { label: "Energy", value: petService.tiredness,
-      hint: petService.sleeping ? "recovering — Zzz…" : "naps when exhausted" },
-    { label: "Fun", value: petService.boredom, hint: "roaming cures boredom" },
-    { label: "Affection", value: petService.loneliness, hint: "click the pet!" }
+      hint: petService.sleeping ? "recovering — Zzz…" : "naps when exhausted",
+      action: "", actionLabel: "", actionTip: "" },
+    { label: "Fun", value: petService.boredom, hint: "roaming cures boredom",
+      action: "roam",
+      actionLabel: petService.settings.roamEnabled === true ? "Come home" : "Go play",
+      actionTip: petService.canRoam
+        ? "Let the pet roam and climb your windows"
+        : "Too young to go out alone" },
+    { label: "Affection", value: petService.loneliness, hint: "click the pet!",
+      action: "", actionLabel: "", actionTip: "" }
   ] : []
+
+  function runAction(kind) {
+    if (!ready) return
+    if (kind === "feed") petService.feedNow()
+    else if (kind === "clean") petService.cleanNow()
+    else if (kind === "roam")
+      petService.setRoamEnabled(!(petService.settings.roamEnabled === true))
+  }
 
   KeyboardPanel {
     id: panel
@@ -43,8 +78,8 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     padding: Style.space(14)
-    contentWidth: panel.fittedContentWidth(Style.space(300))
-    contentHeight: panel.cappedContentHeight(Style.space(470))
+    contentWidth: panel.fittedContentWidth(Style.space(410))
+    contentHeight: panel.cappedContentHeight(Style.space(440))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -146,84 +181,78 @@ Panel {
           Repeater {
             model: root.needs
 
-            Column {
+            // One row per need: the gauge block on the left, its care button
+            // (when the need has one) right next to it. A fixed action slot
+            // on every row keeps all the gauges the same length.
+            Row {
               id: needRow
               required property var modelData
               width: parent.width
-              spacing: Style.space(3)
+              spacing: Style.space(10)
 
-              Text {
-                text: needRow.modelData.label
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                renderType: Text.NativeRendering
-              }
+              readonly property real actionSlot: Style.space(104)
 
-              Rectangle {
-                width: parent.width
-                height: Style.space(6)
-                radius: height / 2
-                color: Qt.alpha(root.foreground, 0.15)
+              Column {
+                width: needRow.width - needRow.actionSlot - needRow.spacing
+                spacing: Style.space(3)
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                  text: needRow.modelData.label
+                  color: root.foreground
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  renderType: Text.NativeRendering
+                }
 
                 Rectangle {
-                  // The bar shows wellbeing, so a rising need drains it.
-                  width: parent.width * (1 - needRow.modelData.value / 100)
-                  height: parent.height
-                  radius: parent.radius
-                  color: needRow.modelData.value >= 60
-                    ? Color.urgent : Color.accent
+                  width: parent.width
+                  height: Style.space(6)
+                  radius: height / 2
+                  color: Qt.alpha(root.foreground, 0.15)
 
-                  Behavior on width { NumberAnimation { duration: 300 } }
+                  Rectangle {
+                    // The bar shows wellbeing, so a rising need drains it.
+                    width: parent.width * (1 - needRow.modelData.value / 100)
+                    height: parent.height
+                    radius: parent.radius
+                    color: needRow.modelData.value >= 60
+                      ? Color.urgent : Color.accent
+
+                    Behavior on width { NumberAnimation { duration: 300 } }
+                  }
+                }
+
+                Text {
+                  text: needRow.modelData.hint
+                  color: Qt.alpha(root.foreground, 0.6)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption !== undefined ? Style.font.caption : Style.font.bodySmall
+                  renderType: Text.NativeRendering
                 }
               }
 
-              Text {
-                text: needRow.modelData.hint
-                color: Qt.alpha(root.foreground, 0.6)
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption !== undefined ? Style.font.caption : Style.font.bodySmall
-                renderType: Text.NativeRendering
+              Item {
+                width: needRow.actionSlot
+                height: needRow.height
+                anchors.verticalCenter: parent.verticalCenter
+
+                Button {
+                  anchors.centerIn: parent
+                  visible: needRow.modelData.action !== ""
+                  text: needRow.modelData.actionLabel
+                  tooltipText: needRow.modelData.actionTip
+                  fontFamily: root.fontFamily
+                  enabled: root.ready && (needRow.modelData.action !== "roam"
+                    || root.petService.canRoam)
+                  opacity: enabled ? 1 : 0.4
+                  onClicked: root.runAction(needRow.modelData.action)
+                }
               }
             }
           }
         }
 
-        // --- care actions ----------------------------------------------------
-
-        Row {
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(8)
-
-          Button {
-            text: "Feed"
-            tooltipText: "A good meal, hunger back to zero"
-            fontFamily: root.fontFamily
-            enabled: root.ready
-            onClicked: root.petService.feedNow()
-          }
-
-          Button {
-            text: "Clean"
-            tooltipText: "Bath time, hygiene back to zero"
-            fontFamily: root.fontFamily
-            enabled: root.ready
-            onClicked: root.petService.cleanNow()
-          }
-
-          Button {
-            text: root.ready && root.petService.settings.roamEnabled === true
-              ? "Come home" : "Go play"
-            tooltipText: root.ready && !root.petService.canRoam
-              ? "Too young to go out alone"
-              : "Let the pet roam along the bottom of the screen"
-            fontFamily: root.fontFamily
-            enabled: root.ready && root.petService.canRoam
-            opacity: enabled ? 1 : 0.4
-            onClicked: root.petService.setRoamEnabled(
-              !(root.petService.settings.roamEnabled === true))
-          }
-        }
       }
     }
   }
