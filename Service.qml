@@ -105,6 +105,20 @@ Item {
     onTriggered: root.transientAnim = ""
   }
 
+  // The shared emote bubble to float above the pet, one glyph per state.
+  // Views hide the bubble when the file doesn't exist yet.
+  readonly property string emoteName: {
+    if (!initialized || sleeping || stage === "egg") return ""
+    switch (stateAnim) {
+    case "hungry": return "emote_hungry"
+    case "dirty": return "emote_dirty"
+    case "sleepy": return "emote_sleepy"
+    case "bored": return "emote_bored"
+    case "sad": return "emote_sad"
+    default: return ""
+    }
+  }
+
   // The idle-state animation views should show (falls back to plain idle in
   // PetSprite when the dedicated sprite doesn't exist yet).
   readonly property string stateAnim: {

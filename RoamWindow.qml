@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -411,6 +412,52 @@ PanelWindow {
           heart.pop()
         }
       }
+    }
+  }
+
+  // The shared emote bubble: one 16x16 white glyph per state, floating above
+  // the head, tinted urgent when the need turns critical. A missing emote
+  // file simply hides the bubble (Image.Error), so they can land one by one.
+  readonly property string emoteName: {
+    if (!petService) return ""
+    if (action === "stunned") return "emote_stun"
+    return petService.emoteName
+  }
+
+  Item {
+    id: emote
+    visible: root.emoteName !== "" && root.action !== "held"
+      && emoteImage.status === Image.Ready
+    width: Math.round(root.spriteSize * 0.75)
+    height: width
+    x: root.petX + Math.round(root.spriteSize * 0.7)
+    y: root.petY - root.spriteSize - height + bob
+
+    property real bob: 0
+    SequentialAnimation on bob {
+      running: emote.visible
+      loops: Animation.Infinite
+      NumberAnimation { from: 0; to: -4; duration: 900; easing.type: Easing.InOutQuad }
+      NumberAnimation { from: -4; to: 0; duration: 900; easing.type: Easing.InOutQuad }
+    }
+
+    Image {
+      id: emoteImage
+      anchors.fill: parent
+      source: root.emoteName !== ""
+        ? Qt.resolvedUrl("assets/sprites/" + root.emoteName + ".png") : ""
+      smooth: false
+      mipmap: false
+      fillMode: Image.PreserveAspectFit
+      visible: false
+    }
+
+    MultiEffect {
+      anchors.fill: emoteImage
+      source: emoteImage
+      colorization: 1
+      // Same tint as the pet, one creature one color.
+      colorizationColor: Color.foreground
     }
   }
 

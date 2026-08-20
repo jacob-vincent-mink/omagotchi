@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -33,6 +34,8 @@ Panel {
   readonly property var barIdentity: hostWidget || root
 
   readonly property bool ready: !!petService && petService.initialized === true
+  // Out roaming = not home: the plate stays empty while it plays outside.
+  readonly property bool petIsOut: ready && petService.roaming === true
   readonly property color foreground: Color.popups.text
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -102,15 +105,26 @@ Panel {
 
         Rectangle {
           width: parent.width
-          height: Style.space(120)
+          height: Style.space(150)
           radius: Style.cornerRadius > 0 ? Style.space(10) : 0
           color: Qt.alpha(Color.accent, 0.08)
           border.width: 1
           border.color: Qt.alpha(Color.accent, 0.25)
 
+          Text {
+            anchors.centerIn: parent
+            visible: root.petIsOut
+            text: "Out playing…"
+            color: Qt.alpha(root.foreground, 0.5)
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            renderType: Text.NativeRendering
+          }
+
           PetSprite {
             id: bigPet
             anchors.centerIn: parent
+            visible: !root.petIsOut
             width: Style.space(80)
             height: Style.space(80)
             form: root.ready ? root.petService.form : "egg"
@@ -128,10 +142,54 @@ Panel {
 
           MouseArea {
             anchors.fill: bigPet
+            enabled: !root.petIsOut
             cursorShape: Qt.PointingHandCursor
             onClicked: {
               if (root.ready) root.petService.petThePet()
               panelHeart.pop()
+            }
+          }
+
+          // The emote bubble, floating at the pet's shoulder when it is home.
+          Item {
+            id: panelEmote
+            visible: !root.petIsOut && root.ready
+              && root.petService.emoteName !== ""
+              && root.petService.transientAnim === ""
+              && panelEmoteImage.status === Image.Ready
+            width: Style.space(32)
+            height: width
+            anchors.left: bigPet.right
+            anchors.leftMargin: -Style.space(10)
+            anchors.bottom: bigPet.top
+            anchors.bottomMargin: -Style.space(14)
+
+            property real bob: 0
+            SequentialAnimation on bob {
+              running: panelEmote.visible
+              loops: Animation.Infinite
+              NumberAnimation { from: 0; to: -3; duration: 900; easing.type: Easing.InOutQuad }
+              NumberAnimation { from: -3; to: 0; duration: 900; easing.type: Easing.InOutQuad }
+            }
+            transform: Translate { y: panelEmote.bob }
+
+            Image {
+              id: panelEmoteImage
+              anchors.fill: parent
+              source: root.ready && root.petService.emoteName !== ""
+                ? Qt.resolvedUrl("assets/sprites/" + root.petService.emoteName + ".png") : ""
+              smooth: false
+              mipmap: false
+              fillMode: Image.PreserveAspectFit
+              visible: false
+            }
+
+            MultiEffect {
+              anchors.fill: panelEmoteImage
+              source: panelEmoteImage
+              colorization: 1
+              // Same tint as the pet in the panel.
+              colorizationColor: Color.accent
             }
           }
 
