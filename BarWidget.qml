@@ -87,6 +87,7 @@ BarWidget {
         // An unhappy pet fidgets in the bar to catch the eye.
         frameMs: root.serviceReady
           && root.petService.mood !== "happy" && root.petService.mood !== "egg"
+          && root.petService.mood !== "sleeping"
           ? 350 : 900
         tint: button.foreground
       }

@@ -21,9 +21,17 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property var needs: ready ? [
-    { label: "Hunger", value: petService.hunger, hint: petService.pendingUpdates + " pending updates" },
-    { label: "Grooming", value: petService.dirtiness, hint: petService.orphanCount + " orphaned packages" },
-    { label: "Sleep", value: petService.tiredness, hint: Math.round(petService.uptimeHours) + "h uptime" },
+    { label: "Hunger", value: petService.hunger,
+      hint: petService.pendingUpdates > 0
+        ? "rising faster: " + petService.pendingUpdates + " updates pending"
+        : "rises over time" },
+    { label: "Hygiene", value: petService.dirtiness,
+      hint: petService.orphanCount > 0
+        ? "rising faster: " + petService.orphanCount + " orphaned packages"
+        : "rises over time" },
+    { label: "Energy", value: petService.tiredness,
+      hint: petService.sleeping ? "recovering — Zzz…" : "naps when exhausted" },
+    { label: "Fun", value: petService.boredom, hint: "roaming cures boredom" },
     { label: "Affection", value: petService.loneliness, hint: "click the pet!" }
   ] : []
 
@@ -36,7 +44,7 @@ Panel {
     focusTarget: keyCatcher
     padding: Style.space(14)
     contentWidth: panel.fittedContentWidth(Style.space(300))
-    contentHeight: panel.cappedContentHeight(Style.space(400))
+    contentHeight: panel.cappedContentHeight(Style.space(470))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -164,7 +172,7 @@ Panel {
                   height: parent.height
                   radius: parent.radius
                   color: needRow.modelData.value >= 60
-                    ? Color.error : Color.accent
+                    ? Color.urgent : Color.accent
 
                   Behavior on width { NumberAnimation { duration: 300 } }
                 }
@@ -189,19 +197,18 @@ Panel {
 
           Button {
             text: "Feed"
-            tooltipText: "Run the Omarchy update in a terminal"
+            tooltipText: "A good meal, hunger back to zero"
             fontFamily: root.fontFamily
             enabled: root.ready
-            onClicked: root.petService.feed()
+            onClicked: root.petService.feedNow()
           }
 
           Button {
-            text: "Groom"
-            tooltipText: "Remove orphaned packages in a terminal"
+            text: "Clean"
+            tooltipText: "Bath time, hygiene back to zero"
             fontFamily: root.fontFamily
-            enabled: root.ready && root.petService.orphanCount > 0
-            opacity: enabled ? 1 : 0.4
-            onClicked: root.petService.groom()
+            enabled: root.ready
+            onClicked: root.petService.cleanNow()
           }
 
           Button {

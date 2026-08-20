@@ -5,16 +5,14 @@ import Quickshell.Io
 // Headless pet brain. Loaded once at shell startup, independent of the bar
 // widget, so the pet keeps living (and roaming) with the panel closed.
 //
-// Design rule: needs rise with time and universal Arch signals (pending
-// updates, orphans, uptime), never with absolute hardware performance, so the
-// pet plays the same on a 10-year-old laptop and a fresh build.
+// Needs follow the classic loop: they rise with active shell time so there is
+// always something to do, whatever the hardware. System state only flavors the
+// pace — pending updates make it hungrier faster, orphaned packages make it
+// get dirty faster. Nothing here depends on absolute machine performance.
 //
-// Commands executed (all fixed argv, no interpolation):
-//   checkupdates              read-only, pending official updates
-//   pacman -Qdtq              read-only, orphaned packages
-//   cat /proc/uptime          read-only
-//   omarchy-launch-floating-terminal-with-presentation omarchy-update
-//                             feed action: user drives the update themselves
+// Commands executed (all fixed argv, read-only, no interpolation):
+//   checkupdates              pending official updates
+//   pacman -Qdtq              orphaned packages
 Item {
   id: root
 
@@ -46,6 +44,13 @@ Item {
   property real careSum: 0
   property int careCount: 0
 
+  // Need levels, 0 = fine, 100 = critical. All persisted.
+  property real hungerLevel: 0
+  property real dirtLevel: 0
+  property real tirednessLevel: 0
+  property real boredomLevel: 0
+  property bool sleeping: false
+
   readonly property var knownForms: ["egg", "baby", "child", "teen_neat",
     "teen_scruffy", "adult_ace", "adult_ok", "adult_gremlin"]
 
@@ -54,11 +59,10 @@ Item {
     ? omarchyPath + "/bin/omarchy-notification-send"
     : "omarchy-notification-send"
 
-  // --- probe results -----------------------------------------------------------
+  // --- probe results ---------------------------------------------------------
 
   property int pendingUpdates: 0
   property int orphanCount: 0
-  property real uptimeHours: 0
   property double nowMs: Date.now()
 
   property bool initialized: false
@@ -67,22 +71,22 @@ Item {
   property string loadedSettingsText: ""
   property string loadedPetText: ""
 
-  // --- needs, 0 = fine, 100 = critical ----------------------------------------
+  // --- derived needs ---------------------------------------------------------
 
-  // 25 pending updates = starving.
-  readonly property real hunger: Math.min(100, pendingUpdates * 4)
-  // 8 orphaned packages = filthy.
-  readonly property real dirtiness: Math.min(100, orphanCount * 12.5)
-  // A full week without a reboot = exhausted.
-  readonly property real tiredness: Math.min(100, uptimeHours / 168 * 100)
-  // A day without affection = lonely. Roaming keeps it half-entertained.
+  readonly property real hunger: Math.max(0, Math.min(100, hungerLevel))
+  readonly property real dirtiness: Math.max(0, Math.min(100, dirtLevel))
+  readonly property real tiredness: Math.max(0, Math.min(100, tirednessLevel))
+  readonly property real boredom: Math.max(0, Math.min(100, boredomLevel))
+  // A day without affection = lonely.
   readonly property real loneliness: {
     var hours = lastPetMs > 0 ? Math.max(0, (nowMs - lastPetMs) / 3600000) : 0
-    var value = Math.min(100, hours / 24 * 100)
-    return settings.roamEnabled === true ? Math.min(50, value) : value
+    return Math.min(100, hours / 24 * 100)
   }
 
-  readonly property real worstNeed: Math.max(hunger, dirtiness, tiredness, loneliness)
+  readonly property bool roaming: canRoam && settings.roamEnabled === true
+
+  readonly property real worstNeed: Math.max(hunger, dirtiness, tiredness,
+    boredom, loneliness)
   readonly property real happiness: Math.round(100 - worstNeed)
 
   readonly property real careAverage: careCount > 0 ? careSum / careCount : 100
@@ -95,13 +99,15 @@ Item {
     egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult"
   })[stage] || stage
 
-  // Priority order: the loudest body complaint wins over feelings.
+  // Priority order: sleep is a state, then the loudest complaint wins.
   readonly property string mood: {
     if (!initialized) return "sleeping"
     if (stage === "egg") return "egg"
+    if (sleeping) return "sleeping"
     if (hunger >= 60) return "hungry"
     if (dirtiness >= 60) return "dirty"
     if (tiredness >= 60) return "sleepy"
+    if (boredom >= 60) return "bored"
     if (loneliness >= 60) return "lonely"
     if (worstNeed >= 35) return "meh"
     return "happy"
@@ -110,9 +116,15 @@ Item {
   readonly property string moodLabel: {
     switch (mood) {
     case "egg": return "An egg. Something wiggles inside…"
-    case "hungry": return "Hungry — " + pendingUpdates + " updates would taste great"
-    case "dirty": return "Feeling gross — " + orphanCount + " orphaned packages itch"
-    case "sleepy": return "Sleepy — up for " + Math.round(uptimeHours) + "h, a reboot would help"
+    case "sleeping": return "Zzz…"
+    case "hungry": return pendingUpdates > 0
+      ? "Hungry — and those " + pendingUpdates + " pending updates smell delicious"
+      : "Hungry — feed me!"
+    case "dirty": return orphanCount > 0
+      ? "Feeling gross — the " + orphanCount + " orphaned packages don't help"
+      : "Feeling gross — bath time?"
+    case "sleepy": return "Sleepy — about to doze off…"
+    case "bored": return "Bored — let me out to play!"
     case "lonely": return "Lonely — pet me!"
     case "meh": return "Doing okay"
     case "happy": return "Happy!"
@@ -120,7 +132,28 @@ Item {
     }
   }
 
-  // --- growth ------------------------------------------------------------------
+  // --- the minute tick -------------------------------------------------------
+
+  // Per-active-minute rates. System state flavors the pace: pending updates
+  // and orphans speed up hunger/dirt, roaming is fun but tiring.
+  function applyMinute() {
+    hungerLevel = Math.min(100, hungerLevel + (pendingUpdates > 0 ? 0.5 : 0.33))
+    dirtLevel = Math.min(100, dirtLevel + (orphanCount > 0 ? 0.33 : 0.21))
+
+    if (sleeping) {
+      tirednessLevel = Math.max(0, tirednessLevel - 2.2)
+      if (tirednessLevel <= 5) sleeping = false
+    } else {
+      tirednessLevel = Math.min(100, tirednessLevel + (roaming ? 0.55 : 0.28))
+      if (tirednessLevel >= 90) sleeping = true
+    }
+
+    boredomLevel = roaming
+      ? Math.max(0, boredomLevel - 2.0)
+      : Math.min(100, boredomLevel + 0.45)
+  }
+
+  // --- growth ----------------------------------------------------------------
 
   function maybeEvolve() {
     if (stage === "egg" && ageMinutes >= 5)
@@ -158,24 +191,22 @@ Item {
     ])
   }
 
-  // --- actions -----------------------------------------------------------------
+  // --- actions ---------------------------------------------------------------
 
-  function feed() {
-    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation", "omarchy-update"])
-    reprobeTimer.restart()
+  function feedNow() {
+    hungerLevel = 0
+    flushPet()
   }
 
-  function groom() {
-    // Fixed literal handed to the standard Omarchy terminal wrapper; the user
-    // confirms and types their password in the terminal, never here.
-    Quickshell.execDetached(["omarchy-launch-floating-terminal-with-presentation",
-      "sudo pacman -Rns $(pacman -Qdtq)"])
-    reprobeTimer.restart()
+  function cleanNow() {
+    dirtLevel = 0
+    flushPet()
   }
 
   function petThePet() {
     lastPetMs = Date.now()
     nowMs = lastPetMs
+    boredomLevel = Math.max(0, boredomLevel - 10)
     flushPet()
   }
 
@@ -200,11 +231,16 @@ Item {
       form: form,
       ageMinutes: ageMinutes,
       careSum: careSum,
-      careCount: careCount
+      careCount: careCount,
+      hungerLevel: hungerLevel,
+      dirtLevel: dirtLevel,
+      tirednessLevel: tirednessLevel,
+      boredomLevel: boredomLevel,
+      sleeping: sleeping
     }, null, 2) + "\n")
   }
 
-  // --- init --------------------------------------------------------------------
+  // --- init ------------------------------------------------------------------
 
   function initializeIfReady() {
     if (initialized || !settingsFileLoaded || !petFileLoaded) return
@@ -224,6 +260,11 @@ Item {
       ageMinutes = Number(pet.ageMinutes) > 0 ? Number(pet.ageMinutes) : 0
       careSum = Number(pet.careSum) > 0 ? Number(pet.careSum) : 0
       careCount = Number(pet.careCount) > 0 ? Math.round(Number(pet.careCount)) : 0
+      hungerLevel = Number(pet.hungerLevel) > 0 ? Number(pet.hungerLevel) : 0
+      dirtLevel = Number(pet.dirtLevel) > 0 ? Number(pet.dirtLevel) : 0
+      tirednessLevel = Number(pet.tirednessLevel) > 0 ? Number(pet.tirednessLevel) : 0
+      boredomLevel = Number(pet.boredomLevel) > 0 ? Number(pet.boredomLevel) : 0
+      sleeping = pet.sleeping === true
     } catch (petError) { hatchedAtMs = 0; lastPetMs = 0 }
     // A corrupt or hand-edited form falls back to a fresh egg rather than a
     // broken sprite path.
@@ -245,7 +286,6 @@ Item {
 
     updatesProc.running = true
     orphansProc.running = true
-    uptimeProc.running = true
   }
 
   function updateSettingsInMemory(parsed) {
@@ -255,7 +295,7 @@ Item {
     settings = merged
   }
 
-  // --- probes --------------------------------------------------------------------
+  // --- probes ----------------------------------------------------------------
 
   Process {
     id: updatesProc
@@ -286,25 +326,14 @@ Item {
     }
   }
 
-  Process {
-    id: uptimeProc
-    command: ["cat", "/proc/uptime"]
-    stdout: StdioCollector { id: uptimeOut }
-    onExited: function(exitCode) {
-      if (exitCode !== 0) return
-      var seconds = parseFloat(uptimeOut.text)
-      if (!isNaN(seconds)) root.uptimeHours = seconds / 3600
-    }
-  }
-
-  // Loneliness ticks by the minute; light local probes every 5; checkupdates
-  // (which syncs its own db copy) only every 30.
+  // The heartbeat: needs, age, care sampling and evolution, every minute.
   Timer {
     interval: 60 * 1000
     running: root.initialized
     repeat: true
     onTriggered: {
       root.nowMs = Date.now()
+      root.applyMinute()
       root.ageMinutes += 1
       root.careSum += root.happiness
       root.careCount += 1
@@ -316,38 +345,27 @@ Item {
     interval: 5 * 60 * 1000
     running: root.initialized
     repeat: true
-    onTriggered: { orphansProc.running = true; uptimeProc.running = true }
+    onTriggered: orphansProc.running = true
   }
+  // checkupdates syncs its own db copy, so only every 30 minutes.
   Timer {
     interval: 30 * 60 * 1000
     running: root.initialized
     repeat: true
     onTriggered: updatesProc.running = true
   }
-  // After a feed/groom the user may finish in a minute or ten; probe twice.
-  Timer {
-    id: reprobeTimer
-    interval: 2 * 60 * 1000
-    repeat: true
-    onTriggered: {
-      updatesProc.running = true
-      orphansProc.running = true
-      if (interval >= 10 * 60 * 1000) stop()
-      else interval = 10 * 60 * 1000
-    }
-  }
 
-  // --- roaming -------------------------------------------------------------------
+  // --- roaming ---------------------------------------------------------------
 
   // Deliberately a static window with a visibility binding, not a Loader:
   // dynamically created windows leak a zombie layer surface across the shell's
   // plugin hot-reload, which then wedges screencopy (grim) on that output.
   RoamWindow {
     petService: root
-    visible: root.initialized && root.canRoam && root.settings.roamEnabled === true
+    visible: root.initialized && root.roaming
   }
 
-  // --- persistence -----------------------------------------------------------------
+  // --- persistence -----------------------------------------------------------
 
   FileView {
     id: settingsFile

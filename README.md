@@ -5,15 +5,18 @@ A 1-bit desktop pet for [Omarchy](https://omarchy.org), in the spirit of the
 maintenance. There is no fake game loop: every need maps to a real, universal
 Arch signal, and every care action is real system care.
 
-| Need | Rises with | You fix it by |
+| Need | Rises | You fix it by |
 | --- | --- | --- |
-| Hunger | pending official updates (`checkupdates`) | feeding it = running the Omarchy update |
-| Grooming | orphaned packages (`pacman -Qdtq`) | grooming it = pruning the orphans |
-| Sleep | uptime since last boot | rebooting once in a while |
-| Affection | time since you last petted it | clicking it, in the bar panel or on the loose |
+| Hunger | over time — faster while updates are pending | the Feed button |
+| Hygiene | over time — faster while orphaned packages linger | the Clean button |
+| Energy | over time — faster while roaming | letting it nap: it falls asleep on its own when exhausted, wherever it is |
+| Fun | over time | letting it out to roam |
+| Affection | with time since the last petting | clicking it, in the panel or on the loose |
 
-Needs rise with time and package churn, never with hardware performance: the
-pet plays the same on a ten-year-old laptop as on a fresh build.
+Needs rise with active shell time, never with hardware performance: the pet
+plays the same on a ten-year-old laptop as on a fresh build, and there is
+always something to do. Your actual system state only flavors the pace —
+pending updates make it hungrier faster, orphans make it grubbier faster.
 
 ## Growth
 
@@ -34,11 +37,14 @@ the stage:
 Evolutions are announced with a desktop notification. Care average resets at
 each stage, so a rough childhood can still turn into a fine adulthood.
 
-Click "Go play" and the pet leaves its panel to wander along the bottom edge
-of the screen (above your bar if the bar lives down there — layer-shell
-exclusive zones handle that automatically). The strip is fully click-through
-except the pet itself, which you can pet mid-stroll. A roaming pet never gets
-more than half-lonely.
+Click "Go play" and the pet leaves its panel to wander the bottom edge of the
+screen — and to **climb your windows**: any window whose top border leaves
+enough headroom becomes a platform. It walks to a window's side, scales the
+wall, strolls along the top, rides the window if you move it, and hops back
+down (or falls, if you close the window under its feet). Window geometry comes
+from the Hyprland IPC through Quickshell; the overlay is fully click-through
+except the pet itself, which you can pet mid-stroll. Roaming keeps boredom
+down, but it is tiring — an exhausted pet naps on the spot, wherever it is.
 
 The sprites are 16×16, one-bit, and tinted live with your theme's colors —
 switch themes and the pet molts.
@@ -70,19 +76,15 @@ State files (safe to delete) live at:
 ## What it executes, exactly
 
 All commands run with fixed argument lists, never through interpolated shell
-strings, and none of them elevate privileges by themselves:
+strings, and none of them elevate privileges:
 
-- `checkupdates` — read-only, every 30 minutes
-- `pacman -Qdtq` — read-only, every 5 minutes
-- `cat /proc/uptime` — read-only, every 5 minutes
-- Feed: `omarchy-launch-floating-terminal-with-presentation omarchy-update` —
-  opens the standard Omarchy update in a terminal; you drive it and type your
-  own password there
-- Groom: `omarchy-launch-floating-terminal-with-presentation "sudo pacman -Rns $(pacman -Qdtq)"`
-  — a fixed literal handed to the same terminal wrapper; you confirm in the
-  terminal
+- `checkupdates` — read-only, every 30 minutes (need-pace flavor)
+- `pacman -Qdtq` — read-only, every 5 minutes (need-pace flavor)
+- `omarchy-notification-send` — evolution announcements
 
-No network access of its own, no credentials, no daemons, no sudoers rules.
+Window positions for climbing are read from the Hyprland IPC socket via
+Quickshell's Hyprland module — no shell commands involved. No network access,
+no credentials, no daemons, no sudoers rules.
 
 ## Drawing new sprites
 
