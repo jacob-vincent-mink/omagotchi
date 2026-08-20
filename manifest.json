@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "slcode777.omagotchi",
+  "name": "Omagotchi",
+  "version": "0.1.0",
+  "author": "SLcode777",
+  "license": "MIT",
+  "description": "A 1-bit desktop pet you care for through real system maintenance: feed it with updates, groom it by pruning orphans, rest it with a reboot, pet it, and let it roam the bottom of your screen.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omagotchi",
+    "description": "Your Omarchy companion, living in the bar. Click to open its home.",
+    "category": "Fun",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
