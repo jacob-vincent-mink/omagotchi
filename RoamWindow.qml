@@ -145,9 +145,21 @@ PanelWindow {
     return best
   }
 
+  // Falls from higher than this fraction of the screen leave the pet seeing
+  // stars for a few seconds.
+  readonly property real stunFallFraction: 0.4
+  property real fallStartY: 0
+
   function startFall() {
     pendingClimb = null
+    if (action !== "fall") fallStartY = petY
     action = "fall"
+  }
+
+  Timer {
+    id: stunTimer
+    interval: 3000
+    onTriggered: if (root.action === "stunned") root.action = "idle"
   }
 
   function startWalkTo(x, climb) {
@@ -213,7 +225,12 @@ PanelWindow {
         if (landing.y - root.petY <= drop) {
           root.petY = landing.y
           root.support = landing.platform
-          root.action = "idle"
+          if (root.petY - root.fallStartY > root.height * root.stunFallFraction) {
+            root.action = "stunned"
+            stunTimer.restart()
+          } else {
+            root.action = "idle"
+          }
         } else {
           root.petY += drop
         }
@@ -323,9 +340,22 @@ PanelWindow {
     Behavior on rotation { NumberAnimation { duration: 150 } }
 
     readonly property bool asleep: root.petService && root.petService.sleeping
-    frames: asleep || root.action === "idle"
-      ? root.petService.idleFrames
-      : root.petService.walkFrames
+    form: root.petService.form
+    anim: {
+      if (asleep) return "sleep"
+      switch (root.action) {
+      case "walk":
+      case "fall":
+      case "held": return "walk" // held: legs kicking in protest
+      case "climb": return "climb"
+      case "stunned": return "stunned"
+      default: return root.petService.transientAnim !== ""
+        ? root.petService.transientAnim
+        : root.petService.stateAnim
+      }
+    }
+    // A climb without its dedicated sprite reuses the walk frames (rotated).
+    fallbackAnim: root.action === "climb" ? "walk" : "idle"
     frameMs: asleep ? 1200 : (root.action === "idle" ? 500 : 220)
     tint: Color.foreground
     mirrored: root.facingLeft
@@ -337,6 +367,8 @@ PanelWindow {
     MouseArea {
       id: grabArea
       anchors.fill: parent
+      // A stunned pet is too dizzy to be petted or picked up.
+      enabled: root.action !== "stunned"
       cursorShape: root.action === "held" ? Qt.ClosedHandCursor : Qt.PointingHandCursor
 
       property real grabDx: 0

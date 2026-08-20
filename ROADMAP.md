@@ -27,9 +27,14 @@ Branches adulte (hommage au chart Gen1 : l'ado crado plafonne un cran plus bas) 
 | ≥ 40 | `adult_ok` | `adult_gremlin` |
 | < 40 | `adult_gremlin` | `adult_gremlin` |
 
-**Plus tard (post-concours ?)** : arbre complet façon chart Gen1
-(`~/PROJECTS/omagotchiPlugin/P1 GC 2.png`) — plus de formes adultes + un
-« special » caché. Bloqué par : sprites supplémentaires.
+**Décision (2026-08-20)** : l'arbre est figé à 2 ados / 3 adultes — suffisant.
+L'arbre Gen1 complet est abandonné (le chart reste une référence d'ambiance).
+
+**Départ & générations** : à l'âge adulte, un bouton « Let it go » (avec
+confirmation) permet de laisser partir son compagnon — clin d'œil au
+Tamagotchi original qui repartait sur sa planète. Un nouvel œuf apparaît et
+le **compteur de générations** s'incrémente (« Gen 2 », « Gen 3 »… affiché
+dans le panel).
 
 ---
 
@@ -136,7 +141,7 @@ Priorité aux formes qu'on voit longtemps : `child`, les 2 `teen_*`, puis les
 | --- | --- | --- |
 | 1 | Moteur d'anims avec fallback + bulles d'émotion | Claude |
 | 2 | Multiplicateurs de besoins par stade (tableau §3 à valider avant) | Claude |
-| 3 | État sonné après grande chute | Claude |
+| 3 | État sonné après grande chute + départ de l'adulte (générations) | Claude |
 | 4 | Sons optionnels (setting + placeholders générés) | Claude |
 | 5 | Sprites P1 (idle/walk/sleep des 8 formes) | **Stella** |
 | 6 | Bulles P1,5 | **Stella** |
@@ -150,7 +155,6 @@ plus que sprites + démo + soumission.
 
 ## 7. Post-concours (backlog)
 
-- Arbre d'évolution Gen1 complet (+ special caché)
 - Multi-écran (le pet suit l'écran focus ? un pet par écran ?)
 - Support scale ≠ 1 (coords Hyprland vs surface)
 - Se cacher quand une fenêtre passe fullscreen

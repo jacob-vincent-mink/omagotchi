@@ -113,9 +113,15 @@ Panel {
             anchors.centerIn: parent
             width: Style.space(80)
             height: Style.space(80)
-            frames: root.ready
-              ? root.petService.idleFrames
-              : ["egg_idle_a.png", "egg_idle_b.png"]
+            form: root.ready ? root.petService.form : "egg"
+            anim: {
+              if (!root.ready) return "idle"
+              if (root.petService.transientAnim !== "") return root.petService.transientAnim
+              // Teens hanging out in their room are on their laptop, obviously.
+              if (root.petService.stage === "teen" && root.petService.stateAnim === "idle")
+                return "laptop"
+              return root.petService.stateAnim
+            }
             frameMs: 600
             tint: Color.accent
           }
@@ -172,11 +178,23 @@ Panel {
             ? root.petService.stageLabel + " · "
               + Math.floor(root.petService.ageMinutes / 60) + "h"
               + Math.floor(root.petService.ageMinutes % 60) + "m old"
+              + (root.petService.generation > 1
+                ? " · Gen " + root.petService.generation : "")
             : ""
           color: Qt.alpha(root.foreground, 0.6)
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           renderType: Text.NativeRendering
+        }
+
+        Button {
+          anchors.horizontalCenter: parent.horizontalCenter
+          visible: root.ready && root.petService.stage === "adult"
+          text: "Let it go"
+          tooltipText: "Say goodbye — a new egg will appear (Gen "
+            + (root.ready ? root.petService.generation + 1 : 2) + ")"
+          fontFamily: root.fontFamily
+          onClicked: farewellConfirm.opened = true
         }
 
         // --- needs ---------------------------------------------------------
@@ -260,6 +278,18 @@ Panel {
           }
         }
 
+      }
+
+      ConfirmDialog {
+        id: farewellConfirm
+        anchors.fill: parent
+        message: "Let your companion go? It will fly home, and a new egg will appear."
+        confirmText: "Say goodbye"
+        onConfirmed: {
+          opened = false
+          if (root.ready) root.petService.sendOff()
+        }
+        onCanceled: opened = false
       }
     }
   }

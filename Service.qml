@@ -43,6 +43,7 @@ Item {
   property real ageMinutes: 0
   property real careSum: 0
   property int careCount: 0
+  property int generation: 1
 
   // Need levels, 0 = fine, 100 = critical. All persisted.
   property real hungerLevel: 0
@@ -91,13 +92,33 @@ Item {
 
   readonly property real careAverage: careCount > 0 ? careSum / careCount : 100
   readonly property bool canRoam: stage !== "egg" && stage !== "baby"
-  readonly property var idleFrames: [form + "_idle_a.png", form + "_idle_b.png"]
-  readonly property var walkFrames: canRoam
-    ? [form + "_walk_a.png", form + "_walk_b.png"]
-    : idleFrames
   readonly property string stageLabel: ({
     egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult"
   })[stage] || stage
+
+  // Short-lived animation for a care action ("eat", "wash"), shown by the
+  // panel and the roaming pet, then cleared.
+  property string transientAnim: ""
+  Timer {
+    id: transientTimer
+    interval: 2500
+    onTriggered: root.transientAnim = ""
+  }
+
+  // The idle-state animation views should show (falls back to plain idle in
+  // PetSprite when the dedicated sprite doesn't exist yet).
+  readonly property string stateAnim: {
+    if (!initialized || stage === "egg") return "idle"
+    if (sleeping) return "sleep"
+    switch (mood) {
+    case "hungry": return "hungry"
+    case "dirty": return "dirty"
+    case "sleepy": return "sleepy"
+    case "bored": return "bored"
+    case "lonely": return "sad"
+    default: return "idle"
+    }
+  }
 
   // Priority order: sleep is a state, then the loudest complaint wins.
   readonly property string mood: {
@@ -134,23 +155,38 @@ Item {
 
   // --- the minute tick -------------------------------------------------------
 
+  // Per-stage personalities: babies nap constantly, children burst with
+  // energy and want out, teens raid the fridge and stay in. See ROADMAP §3.
+  readonly property var stageRates: ({
+    baby:  { hunger: 1.5, dirt: 1, tired: 2.0, fun: 0.5 },
+    child: { hunger: 1,   dirt: 1, tired: 1,   fun: 1.5 },
+    teen:  { hunger: 2,   dirt: 1, tired: 0.8, fun: 0.5 },
+    adult: { hunger: 1,   dirt: 1, tired: 1,   fun: 1 }
+  })
+
   // Per-active-minute rates. System state flavors the pace: pending updates
   // and orphans speed up hunger/dirt, roaming is fun but tiring.
   function applyMinute() {
-    hungerLevel = Math.min(100, hungerLevel + (pendingUpdates > 0 ? 0.5 : 0.33))
-    dirtLevel = Math.min(100, dirtLevel + (orphanCount > 0 ? 0.33 : 0.21))
+    if (stage === "egg") return // an egg has no needs yet
+    var rates = stageRates[stage] || stageRates.adult
+
+    hungerLevel = Math.min(100,
+      hungerLevel + (pendingUpdates > 0 ? 0.5 : 0.33) * rates.hunger)
+    dirtLevel = Math.min(100,
+      dirtLevel + (orphanCount > 0 ? 0.33 : 0.21) * rates.dirt)
 
     if (sleeping) {
       tirednessLevel = Math.max(0, tirednessLevel - 2.2)
       if (tirednessLevel <= 5) sleeping = false
     } else {
-      tirednessLevel = Math.min(100, tirednessLevel + (roaming ? 0.55 : 0.28))
+      tirednessLevel = Math.min(100,
+        tirednessLevel + (roaming ? 0.55 : 0.28) * rates.tired)
       if (tirednessLevel >= 90) sleeping = true
     }
 
     boredomLevel = roaming
       ? Math.max(0, boredomLevel - 2.0)
-      : Math.min(100, boredomLevel + 0.45)
+      : Math.min(100, boredomLevel + 0.45 * rates.fun)
   }
 
   // --- growth ----------------------------------------------------------------
@@ -195,12 +231,37 @@ Item {
 
   function feedNow() {
     hungerLevel = 0
+    transientAnim = "eat"
+    transientTimer.restart()
     flushPet()
   }
 
   function cleanNow() {
     dirtLevel = 0
+    transientAnim = "wash"
+    transientTimer.restart()
     flushPet()
+  }
+
+  // The Tamagotchi farewell: the adult flies home, a new egg appears, and
+  // the generation counter carries the legacy.
+  function sendOff() {
+    if (stage !== "adult") return
+    generation += 1
+    stage = "egg"
+    form = "egg"
+    ageMinutes = 0
+    careSum = 0
+    careCount = 0
+    hungerLevel = 0
+    dirtLevel = 0
+    tirednessLevel = 0
+    boredomLevel = 0
+    sleeping = false
+    hatchedAtMs = Date.now()
+    lastPetMs = hatchedAtMs
+    flushPet()
+    notify("Omagotchi", "Your companion waved goodbye and flew home… a new egg appeared! (Gen " + generation + ")")
   }
 
   function petThePet() {
@@ -232,6 +293,7 @@ Item {
       ageMinutes: ageMinutes,
       careSum: careSum,
       careCount: careCount,
+      generation: generation,
       hungerLevel: hungerLevel,
       dirtLevel: dirtLevel,
       tirednessLevel: tirednessLevel,
@@ -260,6 +322,7 @@ Item {
       ageMinutes = Number(pet.ageMinutes) > 0 ? Number(pet.ageMinutes) : 0
       careSum = Number(pet.careSum) > 0 ? Number(pet.careSum) : 0
       careCount = Number(pet.careCount) > 0 ? Math.round(Number(pet.careCount)) : 0
+      generation = Number(pet.generation) >= 1 ? Math.round(Number(pet.generation)) : 1
       hungerLevel = Number(pet.hungerLevel) > 0 ? Number(pet.hungerLevel) : 0
       dirtLevel = Number(pet.dirtLevel) > 0 ? Number(pet.dirtLevel) : 0
       tirednessLevel = Number(pet.tirednessLevel) > 0 ? Number(pet.tirednessLevel) : 0
