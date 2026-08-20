@@ -43,13 +43,16 @@ dans le panel).
 Tous montent de 0 (bien) à 100 (critique) par tick de minute active. Le pet
 se plaint (humeur + gigote dans la barre) à partir de **60**.
 
-| Besoin | Vitesse actuelle | 0 → 100 | Modulateurs actuels | Se soigne par |
+| Besoin | Vitesse de base | 0 → 100 | Modulateurs | Se soigne par |
 | --- | --- | --- | --- | --- |
-| Faim | +0,33/min | ~5 h 03 | updates en attente → +0,5/min (~3 h 20) | bouton Feed |
-| Hygiène | +0,21/min | ~7 h 56 | orphelins pacman → +0,33/min (~5 h 03) | bouton Clean |
-| Énergie (fatigue) | +0,28/min éveillé | ~6 h (s'endort à 90, soit ~5 h 21) | balade → +0,55/min (dodo après ~2 h 44) | sieste auto : −2,2/min, réveil à ≤ 5 (~39 min) |
-| Fun (ennui) | +0,45/min | ~3 h 42 | balade → **−2/min** | sortir se balader |
-| Affection | +100 en **24 h temps réel** (pas minutes actives) | 24 h | caresse → reset + ennui −10 | cliquer le pet |
+| Faim | +0,33/min | ~5 h 03 | updates en attente → +0,5/min ; ×stade (§3) | bouton Feed (à la maison uniquement) |
+| Hygiène | +0,21/min | ~7 h 56 | orphelins pacman → +0,33/min ; ×stade | **frotter à la souris** dans sa chambre (0,03 pt/px, gigote + étincelles) |
+| Énergie (fatigue) | +0,28/min éveillé | ~6 h (s'endort à 90) | balade → +0,55/min ; ×stade | sieste auto : −2,2/min, réveil à ≤ 5 (~39 min) |
+| Fun (ennui) | +0,45/min | ~3 h 42 | balade → **−2/min** ; ×stade | sortir se balader (caresse : −10) |
+| Affection | +0,12/min | ~14 h actives | — | **session de câlins** : −10 par caresse |
+
+Bulles d'emote : si plusieurs besoins ≥ 60, la bulle alterne toutes les 3 s.
+Stun : 3 étoiles (`emote_stunned.png`) en orbite code, pas de bulle.
 
 ## 3. Besoins — ajustements par stade (À VALIDER ensemble)
 
@@ -137,18 +140,19 @@ Priorité aux formes qu'on voit longtemps : `child`, les 2 `teen_*`, puis les
 
 ## 6. Ordre de bataille (d'ici lundi 9h)
 
-| # | Quoi | Qui |
-| --- | --- | --- |
-| 1 | Moteur d'anims avec fallback + bulles d'émotion | Claude |
-| 2 | Multiplicateurs de besoins par stade (tableau §3 à valider avant) | Claude |
-| 3 | État sonné après grande chute + départ de l'adulte (générations) | Claude |
-| 4 | Sons optionnels (setting + placeholders générés) | Claude |
-| 5 | Sprites P1 (idle/walk/sleep des 8 formes) | **Stella** |
-| 6 | Bulles P1,5 | **Stella** |
-| 7 | Laptop de l'ado dans le panel | Claude (dès sprites teen) |
-| 8 | Sprites P2 au fil de l'eau | **Stella** |
-| 9 | GIF de démo (escalade + grab) + preview.png + README final | ensemble |
-| 10 | Repo GitHub public, `omarchy plugin validate`, scan sécurité, soumission | ensemble |
+| # | Quoi | Qui | État |
+| --- | --- | --- | --- |
+| 1 | Moteur d'anims avec fallback + bulles d'émotion (+ alternance) | Claude | ✅ 20/08 |
+| 2 | Multiplicateurs de besoins par stade | Claude | ✅ 20/08 |
+| 3 | État sonné (étoiles en orbite) + départ de l'adulte (générations) | Claude | ✅ 20/08 |
+| — | Bonus 20/08 : grab & carry, session de câlins, frottage hygiène, panel (chambre vide en balade, Zzz, boutons alignés) | Claude | ✅ |
+| 4 | Sons optionnels (setting + placeholders générés) | Claude | ⏳ |
+| 5 | Sprites P1 : sleep des 8 formes (elle avait oublié le dodo ^^) + redraw éventuel idle/walk | **Stella** | ⏳ |
+| 6 | Bulles P1,5 | **Stella** | ✅ les 6 faites le 20/08 |
+| 7 | Laptop de l'ado dans le panel | Claude (dès sprites teen) | ⏳ |
+| 8 | Sprites P2 (eat, wash, climb, stunned, laptop, états) | **Stella** | ⏳ |
+| 9 | GIF de démo (escalade + grab + bain) + preview.png + README final | ensemble | ⏳ |
+| 10 | Repo GitHub public, `omarchy plugin validate`, scan sécurité, soumission | ensemble | ⏳ |
 
 Règle de survie : à partir de samedi, on gèle les mécaniques et on ne fait
 plus que sprites + démo + soumission.

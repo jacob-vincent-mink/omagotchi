@@ -44,14 +44,13 @@ Panel {
       hint: petService.pendingUpdates > 0
         ? "rising faster: " + petService.pendingUpdates + " updates pending"
         : "rises over time",
-      action: "feed", actionLabel: "Feed",
-      actionTip: "A good meal, hunger back to zero" },
+      action: "feed", actionLabel: "Feed", needsHome: true,
+      actionTip: petIsOut ? "It's out playing — call it home first"
+        : "A good meal, hunger back to zero" },
     { label: "Hygiene", value: petService.dirtiness,
-      hint: petService.orphanCount > 0
-        ? "rising faster: " + petService.orphanCount + " orphaned packages"
-        : "rises over time",
-      action: "clean", actionLabel: "Clean",
-      actionTip: "Bath time, hygiene back to zero" },
+      hint: petIsOut ? "wash it at home: press and scrub it with your mouse"
+        : "press and scrub it with your mouse to wash it",
+      action: "", actionLabel: "", actionTip: "" },
     { label: "Energy", value: petService.tiredness,
       hint: petService.sleeping ? "recovering — Zzz…" : "naps when exhausted",
       action: "", actionLabel: "", actionTip: "" },
@@ -68,7 +67,6 @@ Panel {
   function runAction(kind) {
     if (!ready) return
     if (kind === "feed") petService.feedNow()
-    else if (kind === "clean") petService.cleanNow()
     else if (kind === "roam")
       petService.setRoamEnabled(!(petService.settings.roamEnabled === true))
   }
@@ -138,15 +136,102 @@ Panel {
             }
             frameMs: 600
             tint: Color.accent
+
+            // Being scrubbed is wobbly business.
+            SequentialAnimation {
+              running: petArea.pressed && petArea.scrubbing
+              loops: Animation.Infinite
+              NumberAnimation { target: bigPet; property: "rotation"; to: -7; duration: 90 }
+              NumberAnimation { target: bigPet; property: "rotation"; to: 7; duration: 90 }
+              onStopped: bigPet.rotation = 0
+            }
           }
 
+          // Click = pet; press and rub = scrub the dirt off. Same
+          // click-vs-gesture threshold as the roam grab.
           MouseArea {
+            id: petArea
             anchors.fill: bigPet
             enabled: !root.petIsOut
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-              if (root.ready) root.petService.petThePet()
-              panelHeart.pop()
+            cursorShape: pressed && scrubbing ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+
+            property real lastX: 0
+            property real lastY: 0
+            property real travel: 0
+            property bool scrubbing: false
+
+            onPressed: function(mouse) {
+              lastX = mouse.x
+              lastY = mouse.y
+              travel = 0
+              scrubbing = false
+            }
+            property real travelSinceSparkle: 0
+            property int sparkleIndex: 0
+
+            onPositionChanged: function(mouse) {
+              if (!pressed) return
+              var moved = Math.abs(mouse.x - lastX) + Math.abs(mouse.y - lastY)
+              lastX = mouse.x
+              lastY = mouse.y
+              travel += moved
+              if (!scrubbing && travel > 12) scrubbing = true
+              if (scrubbing && root.ready && root.petService.dirtiness > 0) {
+                root.petService.scrub(moved * 0.03)
+                travelSinceSparkle += moved
+                if (travelSinceSparkle > 50) {
+                  travelSinceSparkle = 0
+                  var item = sparkles.itemAt(sparkleIndex % sparkles.count)
+                  if (item) item.pop(bigPet.x + mouse.x, bigPet.y + mouse.y)
+                  sparkleIndex += 1
+                }
+              }
+            }
+            onReleased: {
+              if (scrubbing) {
+                if (root.ready) root.petService.flushPet()
+              } else {
+                if (root.ready) root.petService.petThePet()
+                panelHeart.pop()
+              }
+            }
+          }
+
+          // Soap sparkles while scrubbing: a small pool of them popping in
+          // round-robin around the cursor, so a vigorous scrub foams visibly.
+          Repeater {
+            id: sparkles
+            model: 4
+
+            Text {
+              id: sparkleItem
+              text: "✦"
+              color: Color.accent
+              font.pixelSize: Style.space(18)
+              opacity: 0
+
+              function pop(cx, cy) {
+                x = cx - width / 2 + (Math.random() * 44 - 22)
+                y = cy - height / 2 + (Math.random() * 28 - 14)
+                sparkleAnimation.restart()
+              }
+
+              ParallelAnimation {
+                id: sparkleAnimation
+                NumberAnimation {
+                  target: sparkleItem; property: "y"
+                  from: sparkleItem.y; to: sparkleItem.y - Style.space(22)
+                  duration: 600
+                }
+                NumberAnimation {
+                  target: sparkleItem; property: "rotation"
+                  from: 0; to: Math.random() < 0.5 ? -40 : 40; duration: 600
+                }
+                SequentialAnimation {
+                  NumberAnimation { target: sparkleItem; property: "opacity"; from: 0; to: 1; duration: 100 }
+                  NumberAnimation { target: sparkleItem; property: "opacity"; to: 0; duration: 500 }
+                }
+              }
             }
           }
 
@@ -346,8 +431,9 @@ Panel {
                   text: needRow.modelData.actionLabel
                   tooltipText: needRow.modelData.actionTip
                   fontFamily: root.fontFamily
-                  enabled: root.ready && (needRow.modelData.action !== "roam"
-                    || root.petService.canRoam)
+                  enabled: root.ready
+                    && (needRow.modelData.action !== "roam" || root.petService.canRoam)
+                    && (needRow.modelData.needsHome !== true || !root.petIsOut)
                   opacity: enabled ? 1 : 0.4
                   onClicked: root.runAction(needRow.modelData.action)
                 }

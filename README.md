@@ -7,11 +7,15 @@ Arch signal, and every care action is real system care.
 
 | Need | Rises | You fix it by |
 | --- | --- | --- |
-| Hunger | over time — faster while updates are pending | the Feed button |
-| Hygiene | over time — faster while orphaned packages linger | the Clean button |
+| Hunger | over time — faster while updates are pending | the Feed button (only when it's home) |
+| Hygiene | over time — faster while orphaned packages linger | pressing and **scrubbing it with your mouse** in its room — it wobbles, soap sparkles fly |
 | Energy | over time — faster while roaming | letting it nap: it falls asleep on its own when exhausted, wherever it is |
 | Fun | over time | letting it out to roam |
-| Affection | with time since the last petting | clicking it, in the panel or on the loose |
+| Affection | over time | petting it — each click takes a bite out of the need, so a lonely pet wants a proper cuddle session, not a single tap |
+
+When several needs complain at once, the emote bubble above its head cycles
+through them. Care happens at home: while it's out roaming, the panel shows
+an empty room and feeding/washing wait until you call it back.
 
 Needs rise with active shell time, never with hardware performance: the pet
 plays the same on a ten-year-old laptop as on a fresh build, and there is

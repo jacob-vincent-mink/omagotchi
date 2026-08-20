@@ -263,11 +263,14 @@ Item {
     flushPet()
   }
 
-  function cleanNow() {
-    dirtLevel = 0
+  // Washing is a scrubbing gesture: the panel feeds it mouse travel and the
+  // dirt comes off progressively. Persisted by the caller on gesture end.
+  function scrub(amount) {
+    if (dirtLevel <= 0) return
+    dirtLevel = Math.max(0, dirtLevel - amount)
     transientAnim = "wash"
     transientTimer.restart()
-    flushPet()
+    if (dirtLevel === 0) flushPet()
   }
 
   // The Tamagotchi farewell: the adult flies home, a new egg appears, and
