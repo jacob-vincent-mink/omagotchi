@@ -84,6 +84,8 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      // Breathing room under the last hint line.
+      anchors.bottomMargin: Style.space(14)
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
