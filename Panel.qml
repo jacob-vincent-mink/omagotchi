@@ -108,6 +108,7 @@ Panel {
 
   function beginExit() {
     if (exiting || !ready) return
+    petService.wakeUp()
     exiting = true
     var start = petRoom.mapToItem(exitOverlay,
       (petRoom.width - exitPet.width) / 2, (petRoom.height - exitPet.height) / 2)

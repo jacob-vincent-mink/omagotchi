@@ -373,7 +373,17 @@ Item {
     notify("Omagotchi", "Your companion waved goodbye and flew home… a new egg appeared! (Gen " + generation + ")")
   }
 
+  // A deliberate wake-up — petting, grabbing, or sending it out — unlike
+  // wakeForCare it does not tuck the pet back in afterwards.
+  function wakeUp() {
+    if (!sleeping) return
+    sleeping = false
+    wokenForCare = false
+    flushPet()
+  }
+
   function petThePet() {
+    wakeUp()
     lastPetMs = Date.now()
     nowMs = lastPetMs
     lonelinessLevel = Math.max(0, lonelinessLevel - 10)
