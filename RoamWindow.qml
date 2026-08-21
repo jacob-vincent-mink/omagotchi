@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
@@ -150,11 +151,66 @@ PanelWindow {
   // stars for a few seconds.
   readonly property real stunFallFraction: 0.4
   property real fallStartY: 0
+  // A deliberate jump (dropping out of the panel) lands on its feet, however
+  // high it was — only accidents leave the pet seeing stars.
+  property bool gentleFall: false
+
+  // Tractor beam for panel trips: a translucent cone from the card's bottom
+  // that carries the pet down (and, someday, back up). Origin is frozen at
+  // handoff time; the cone's mouth follows the pet's feet.
+  property bool beamActive: false
+  property real beamX: 0
+  property real beamTopY: 0
 
   function startFall() {
     pendingClimb = null
     if (action !== "fall") fallStartY = petY
     action = "fall"
+  }
+
+  // The way home: the beam reaches down from the card's bottom edge and
+  // pulls the pet up, wherever it is. Without a usable anchor (panel on
+  // another screen), it just pops home like before.
+  function startReturn() {
+    var svc = petService
+    if (!svc) return
+    if (!(svc.handoffX >= 0) || !screen || svc.handoffScreen !== screen.name) {
+      finishReturn()
+      return
+    }
+    pendingClimb = null
+    support = null
+    gentleFall = false
+    beamX = Math.max(spriteSize / 2,
+      Math.min(width - spriteSize / 2, svc.handoffX))
+    beamTopY = svc.handoffY
+    // The pet pops onto the beam's axis at floor level and rides straight
+    // up — the beam stays perfectly vertical.
+    petX = beamX - spriteSize / 2
+    petY = Math.max(beamTopY + 1, floorY)
+    beamActive = true
+    action = "beamup"
+  }
+
+  function finishReturn() {
+    var svc = petService
+    beamActive = false
+    action = "idle"
+    if (svc) {
+      svc.returnRequested = false
+      svc.handoffX = -1
+      svc.handoffY = -1
+      svc.handoffScreen = ""
+      svc.arrivedHome()
+      svc.setRoamEnabled(false)
+    }
+  }
+
+  Connections {
+    target: root.petService
+    function onReturnRequestedChanged() {
+      if (root.petService.returnRequested && root.visible) root.startReturn()
+    }
   }
 
   Timer {
@@ -220,18 +276,26 @@ PanelWindow {
         } else {
           root.petY -= rise
         }
+      } else if (root.action === "beamup") {
+        var pull = root.fallSpeed * dt
+        if (root.petY - root.beamTopY <= pull) root.finishReturn()
+        else root.petY -= pull
       } else if (root.action === "fall") {
         var landing = root.landingBelow(root.petX, root.petY)
         var drop = root.fallSpeed * dt
         if (landing.y - root.petY <= drop) {
           root.petY = landing.y
           root.support = landing.platform
-          if (root.petY - root.fallStartY > root.height * root.stunFallFraction) {
+          if (!root.gentleFall
+              && root.petY - root.fallStartY > root.height * root.stunFallFraction) {
             root.action = "stunned"
             stunTimer.restart()
+            if (root.petService) root.petService.playSound("stun")
           } else {
             root.action = "idle"
           }
+          root.gentleFall = false
+          root.beamActive = false
         } else {
           root.petY += drop
         }
@@ -311,11 +375,31 @@ PanelWindow {
   }
 
   function resetPosition() {
-    petX = Math.max(0, width / 2 - spriteSize / 2)
-    petY = floorY
     support = null
     pendingClimb = null
-    action = "idle"
+    var svc = petService
+    var w = width > 0 ? width : (screen ? screen.width : 0)
+    if (svc && svc.handoffX >= 0 && screen && svc.handoffScreen === screen.name) {
+      // The pet just dropped out of its panel: continue that fall from right
+      // under the card instead of teleporting to the floor.
+      petX = Math.max(0, Math.min(w - spriteSize, svc.handoffX - spriteSize / 2))
+      petY = Math.max(headroom, Math.min(floorY > 0 ? floorY : svc.handoffY, svc.handoffY))
+      beamX = petX + spriteSize / 2
+      beamTopY = svc.handoffY
+      beamActive = true
+      gentleFall = true
+      startFall()
+    } else {
+      beamActive = false
+      petX = Math.max(0, w / 2 - spriteSize / 2)
+      petY = floorY
+      action = "idle"
+    }
+    if (svc) {
+      svc.handoffX = -1
+      svc.handoffY = -1
+      svc.handoffScreen = ""
+    }
     refreshDebounce.restart()
   }
 
@@ -330,6 +414,46 @@ PanelWindow {
   }
 
   // --- the pet ---------------------------------------------------------------
+
+  // The tractor beam: a soft cone widening from the card's bottom edge down
+  // to the pet's feet, spaceship style. Purely visual — the click mask only
+  // covers the sprite, so the beam stays click-through.
+  Shape {
+    id: beam
+    anchors.fill: parent
+    visible: opacity > 0.01
+    // The fade target must stay constant while active: feeding an animated
+    // value through the Behavior restarts it every frame and the fade
+    // livelocks at 0. The shimmer lives in the gradient alpha instead.
+    opacity: root.beamActive ? 1 : 0
+    Behavior on opacity { NumberAnimation { duration: 300 } }
+    preferredRendererType: Shape.CurveRenderer
+
+    // A slow breathing shimmer while the beam is on.
+    property real beamPulse: 1
+    SequentialAnimation {
+      running: root.beamActive
+      loops: Animation.Infinite
+      NumberAnimation { target: beam; property: "beamPulse"; to: 0.7; duration: 500 }
+      NumberAnimation { target: beam; property: "beamPulse"; to: 1.0; duration: 500 }
+      onStopped: beam.beamPulse = 1
+    }
+
+    ShapePath {
+      strokeWidth: -1
+      fillGradient: LinearGradient {
+        x1: root.beamX; y1: root.beamTopY
+        x2: root.beamX; y2: root.petY
+        GradientStop { position: 0; color: Qt.alpha(Color.accent, 0.5 * beam.beamPulse) }
+        GradientStop { position: 1; color: Qt.alpha(Color.accent, 0.08 * beam.beamPulse) }
+      }
+      startX: root.beamX - root.spriteSize * 0.3
+      startY: root.beamTopY
+      PathLine { x: root.beamX + root.spriteSize * 0.3; y: root.beamTopY }
+      PathLine { x: root.beamX + root.spriteSize * 0.9; y: root.petY }
+      PathLine { x: root.beamX - root.spriteSize * 0.9; y: root.petY }
+    }
+  }
 
   PetSprite {
     id: sprite
@@ -368,8 +492,9 @@ PanelWindow {
     MouseArea {
       id: grabArea
       anchors.fill: parent
-      // A stunned pet is too dizzy to be petted or picked up.
-      enabled: root.action !== "stunned"
+      // A stunned pet is too dizzy to be petted or picked up, and the
+      // tractor beam's pull is irresistible.
+      enabled: root.action !== "stunned" && root.action !== "beamup"
       cursorShape: root.action === "held" ? Qt.ClosedHandCursor : Qt.PointingHandCursor
 
       property real grabDx: 0
@@ -395,6 +520,8 @@ PanelWindow {
           root.action = "held"
           root.pendingClimb = null
           root.support = null
+          root.gentleFall = false
+          root.beamActive = false
         }
         root.petX = Math.max(0, Math.min(root.width - root.spriteSize, p.x - grabDx))
         root.petY = Math.max(root.headroom,

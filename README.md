@@ -41,8 +41,9 @@ the stage:
 Evolutions are announced with a desktop notification. Care average resets at
 each stage, so a rough childhood can still turn into a fine adulthood.
 
-Click "Go play" and the pet leaves its panel to wander the bottom edge of the
-screen — and to **climb your windows**: any window whose top border leaves
+Click "Go play" and the pet slides out of its room, drops through the card,
+and a **tractor beam** carries it down to the bottom edge of the screen, where
+it wanders — and **climbs your windows**: any window whose top border leaves
 enough headroom becomes a platform. It walks to a window's side, scales the
 wall, strolls along the top, rides the window if you move it, and hops back
 down (or falls, if you close the window under its feet). Window geometry comes
@@ -53,9 +54,16 @@ down, but it is tiring — an exhausted pet naps on the spot, wherever it is.
 You can also **pick it up**: press and drag to carry it by the scruff (legs
 wiggling in protest), then drop it anywhere — on a window top, on the floor —
 and it falls and lands where you left it. A plain click is still a petting.
+"Come home" summons the beam back: it pulls the pet straight up under the
+panel and lifts it into its room, spaceship style.
 
 The sprites are 16×16, one-bit, and tinted live with your theme's colors —
 switch themes and the pet molts.
+
+Big moments come with little chiptune sound effects — hatching, evolving,
+eating, coming out of the bath all clean, dozing off, being petted, seeing
+stars after a big fall, and the final farewell. A "Sound" toggle at the bottom
+of the panel mutes them all (see [CREDITS.md](CREDITS.md) for sources).
 
 ## Install
 
@@ -79,6 +87,7 @@ State files (safe to delete) live at:
 ## Dependencies
 
 - `pacman-contrib` for `checkupdates` (preinstalled on Omarchy)
+- `pipewire-audio` for `pw-play` sound effects (preinstalled on Omarchy)
 - `coreutils`, `pacman`, `systemd` (base system)
 
 ## What it executes, exactly
@@ -89,6 +98,7 @@ strings, and none of them elevate privileges:
 - `checkupdates` — read-only, every 30 minutes (need-pace flavor)
 - `pacman -Qdtq` — read-only, every 5 minutes (need-pace flavor)
 - `omarchy-notification-send` — evolution announcements
+- `pw-play` — plays the bundled sound effects (only when sound is enabled)
 
 Window positions for climbing are read from the Hyprland IPC socket via
 Quickshell's Hyprland module — no shell commands involved. No network access,

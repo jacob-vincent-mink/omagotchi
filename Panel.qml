@@ -64,11 +64,73 @@ Panel {
       action: "", actionLabel: "", actionTip: "" }
   ] : []
 
+  // Going out is staged: the pet visibly slides down out of its room, drops
+  // through the card, and only then does roaming actually start — with the
+  // exit spot handed to RoamWindow so the fall continues under the panel.
+  // Coming home mirrors it: the beam pulls the pet up to the card, then it
+  // rises back into its room.
+  property bool exiting: false
+  property bool entering: false
+
   function runAction(kind) {
     if (!ready) return
     if (kind === "feed") petService.feedNow()
-    else if (kind === "roam")
-      petService.setRoamEnabled(!(petService.settings.roamEnabled === true))
+    else if (kind === "roam") {
+      if (petService.settings.roamEnabled === true) beginReturn()
+      else beginExit()
+    }
+  }
+
+  function beginReturn() {
+    if (petService.returnRequested) return
+    // Same anchor as the exit: the beam hangs from the card's bottom edge,
+    // centered under the room.
+    var center = petRoom.mapToItem(null, petRoom.width / 2, 0)
+    var cardBottom = keyCatcher.mapToItem(null, 0, keyCatcher.height).y
+    petService.handoffX = center.x
+    petService.handoffY = cardBottom
+    petService.handoffScreen = panelScreen ? panelScreen.name : ""
+    petService.returnRequested = true
+  }
+
+  Connections {
+    target: root.ready ? root.petService : null
+    function onArrivedHome() { root.playEntrance() }
+  }
+
+  function playEntrance() {
+    if (!opened || !ready) return
+    entering = true
+    exitPet.x = (petRoom.width - exitPet.width) / 2
+    exitPet.y = petRoom.height
+    enterAnim.restart()
+  }
+
+  function beginExit() {
+    if (exiting || !ready) return
+    exiting = true
+    var start = petRoom.mapToItem(exitOverlay,
+      (petRoom.width - exitPet.width) / 2, (petRoom.height - exitPet.height) / 2)
+    exitPet.x = start.x
+    exitPet.y = start.y
+    exitPet.slideToY = petRoom.mapToItem(exitOverlay, 0, petRoom.height).y
+    exitAnim.restart()
+  }
+
+  function finishExit() {
+    if (!exiting) return
+    exiting = false
+    if (!ready) return
+    // The panel surface is a full-screen layer shell, so scene coordinates
+    // are screen coordinates. The sprite disappeared behind the card at the
+    // room's edge, so the fall resumes under the card's bottom, not where
+    // the sprite actually stopped.
+    var feetX = exitPet.mapToItem(null, exitPet.width / 2, 0).x
+    var cardBottom = keyCatcher.mapToItem(null, 0, keyCatcher.height).y
+    petService.handoffX = feetX
+    petService.handoffY = cardBottom
+    petService.handoffScreen = panelScreen ? panelScreen.name : ""
+    petService.setRoamEnabled(true)
   }
 
   KeyboardPanel {
@@ -102,6 +164,7 @@ Panel {
         // --- the pet -------------------------------------------------------
 
         Rectangle {
+          id: petRoom
           width: parent.width
           height: Style.space(150)
           radius: Style.cornerRadius > 0 ? Style.space(10) : 0
@@ -122,7 +185,7 @@ Panel {
           PetSprite {
             id: bigPet
             anchors.centerIn: parent
-            visible: !root.petIsOut
+            visible: !root.petIsOut && !root.exiting && !root.entering
             width: Style.space(80)
             height: Style.space(80)
             form: root.ready ? root.petService.form : "egg"
@@ -152,7 +215,7 @@ Panel {
           MouseArea {
             id: petArea
             anchors.fill: bigPet
-            enabled: !root.petIsOut
+            enabled: !root.petIsOut && !root.exiting && !root.entering
             cursorShape: pressed && scrubbing ? Qt.ClosedHandCursor : Qt.PointingHandCursor
 
             property real lastX: 0
@@ -238,7 +301,8 @@ Panel {
           // Same recipe as the roaming view: three letters and a slow pulse.
           Text {
             id: panelZzz
-            visible: !root.petIsOut && root.ready && root.petService.sleeping
+            visible: !root.petIsOut && !root.exiting && !root.entering && root.ready
+              && root.petService.sleeping
             text: "z z Z"
             color: Color.accent
             font.pixelSize: Style.space(16)
@@ -258,7 +322,7 @@ Panel {
           // The emote bubble, floating at the pet's shoulder when it is home.
           Item {
             id: panelEmote
-            visible: !root.petIsOut && root.ready
+            visible: !root.petIsOut && !root.exiting && !root.entering && root.ready
               && root.petService.emoteName !== ""
               && root.petService.transientAnim === ""
               && panelEmoteImage.status === Image.Ready
@@ -442,6 +506,79 @@ Panel {
           }
         }
 
+        Button {
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: root.ready && root.petService.settings.soundEnabled === true
+            ? "Sound: on" : "Sound: off"
+          tooltipText: "Toggle the pet's sound effects"
+          fontFamily: root.fontFamily
+          enabled: root.ready
+          onClicked: root.petService.updateSettings({
+            soundEnabled: !(root.petService.settings.soundEnabled === true)
+          })
+        }
+
+      }
+
+      // The going-out animation: the pet slides over the room's edge, then
+      // gravity wins and it drops straight out. The overlay covers only the
+      // room, so the clip cuts the sprite at the room's bottom border — it
+      // vanishes behind the gauges instead of gliding over them.
+      Item {
+        id: exitOverlay
+        x: contentColumn.x + petRoom.x
+        y: contentColumn.y + petRoom.y
+        width: petRoom.width
+        height: petRoom.height
+        clip: true
+        z: 5
+        visible: exitAnim.running || enterAnim.running
+
+        PetSprite {
+          id: exitPet
+          width: Style.space(80)
+          height: Style.space(80)
+          form: root.ready ? root.petService.form : "egg"
+          // Legs pumping on the way out; serenely carried on the way in.
+          anim: root.entering ? "idle" : "walk"
+          fallbackAnim: "idle"
+          frameMs: 220
+          tint: Color.accent
+
+          property real slideToY: 0
+        }
+
+        SequentialAnimation {
+          id: exitAnim
+          // A careful slide over the edge of the room…
+          NumberAnimation {
+            target: exitPet; property: "y"
+            to: exitPet.slideToY
+            duration: 650
+            easing.type: Easing.InOutQuad
+          }
+          // …then straight down, fully past the room's clipped edge.
+          NumberAnimation {
+            target: exitPet; property: "y"
+            to: exitOverlay.height + exitPet.height
+            duration: 200
+            easing.type: Easing.InQuad
+          }
+          ScriptAction { script: root.finishExit() }
+        }
+
+        // The homecoming: beamed up through the card, the pet rises from the
+        // room's bottom edge back to its spot.
+        SequentialAnimation {
+          id: enterAnim
+          NumberAnimation {
+            target: exitPet; property: "y"
+            to: (petRoom.height - exitPet.height) / 2
+            duration: 600
+            easing.type: Easing.OutQuad
+          }
+          ScriptAction { script: root.entering = false }
+        }
       }
 
       ConfirmDialog {

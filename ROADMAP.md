@@ -146,7 +146,8 @@ Priorité aux formes qu'on voit longtemps : `child`, les 2 `teen_*`, puis les
 | 2 | Multiplicateurs de besoins par stade | Claude | ✅ 20/08 |
 | 3 | État sonné (étoiles en orbite) + départ de l'adulte (générations) | Claude | ✅ 20/08 |
 | — | Bonus 20/08 : grab & carry, session de câlins, frottage hygiène, panel (chambre vide en balade, Zzz, boutons alignés) | Claude | ✅ |
-| 4 | Sons optionnels (setting + placeholders générés) | Claude | ⏳ |
+| 4 | Sons optionnels (setting + placeholders repris du tomato-timer, voir CREDITS.md) | Claude | ✅ 21/08 |
+| — | Bonus 21/08 : sortie animée du panel (glisse + chute derrière la carte) + faisceau tracteur aller/retour 🛸 | Claude | ✅ |
 | 5 | Sprites P1 : sleep des 8 formes (elle avait oublié le dodo ^^) + redraw éventuel idle/walk | **Stella** | ⏳ |
 | 6 | Bulles P1,5 | **Stella** | ✅ les 6 faites le 20/08 |
 | 7 | Laptop de l'ado dans le panel | Claude (dès sprites teen) | ⏳ |

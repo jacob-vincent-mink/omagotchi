@@ -27,7 +27,8 @@ Item {
 
   readonly property var defaultSettings: ({
     roamEnabled: false,
-    roamScale: 3
+    roamScale: 3,
+    soundEnabled: true
   })
   property var settings: defaultSettings
 
@@ -95,6 +96,19 @@ Item {
   readonly property string stageLabel: ({
     egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult"
   })[stage] || stage
+
+  // Where the pet left its panel, in screen coordinates (center x, feet y),
+  // so the roaming window can pick up the fall right under the card. Negative
+  // x means "no handoff": spawn at the usual floor spot.
+  property real handoffX: -1
+  property real handoffY: -1
+  property string handoffScreen: ""
+
+  // Set by the panel to call the pet home through the tractor beam; the roam
+  // window beams it up to the handoff spot, then clears this and fires
+  // arrivedHome so the panel can play the entrance.
+  property bool returnRequested: false
+  signal arrivedHome()
 
   // Short-lived animation for a care action ("eat", "wash"), shown by the
   // panel and the roaming pet, then cleared.
@@ -205,7 +219,10 @@ Item {
     } else {
       tirednessLevel = Math.min(100,
         tirednessLevel + (roaming ? 0.55 : 0.28) * rates.tired)
-      if (tirednessLevel >= 90) sleeping = true
+      if (tirednessLevel >= 90) {
+        sleeping = true
+        playSound("sleep")
+      }
     }
 
     boredomLevel = roaming
@@ -241,7 +258,39 @@ Item {
     careSum = 0
     careCount = 0
     flushPet()
+    playSound(nextStage === "baby" ? "hatch" : "evolve")
     notify("Omagotchi", message)
+  }
+
+  // --- sounds ----------------------------------------------------------------
+
+  // One short clip per event, named after the event so better sounds can be
+  // dropped in without touching code. The current set is placeholders reused
+  // from the tomato-timer plugin's library — see CREDITS.md.
+  readonly property var eventSounds: ({
+    hatch: "hatch.mp3",
+    evolve: "evolve.mp3",
+    eat: "eat.wav",
+    wash: "wash.mp3",
+    pet: "pet.mp3",
+    sleep: "sleep.wav",
+    stun: "stun.wav",
+    farewell: "farewell.wav"
+  })
+
+  // pw-play wants a filesystem path, not a file:// URL.
+  function soundPath(relativePath) {
+    var url = Qt.resolvedUrl(relativePath).toString()
+    if (url.indexOf("file://") === 0) url = url.substring(7)
+    return decodeURIComponent(url)
+  }
+
+  function playSound(event) {
+    if (settings.soundEnabled !== true) return
+    var file = eventSounds[event]
+    if (!file) return
+    Quickshell.execDetached(["pw-play", "--volume", "0.5",
+      soundPath("sounds/" + file)])
   }
 
   function notify(title, body) {
@@ -260,6 +309,7 @@ Item {
     hungerLevel = 0
     transientAnim = "eat"
     transientTimer.restart()
+    playSound("eat")
     flushPet()
   }
 
@@ -270,7 +320,11 @@ Item {
     dirtLevel = Math.max(0, dirtLevel - amount)
     transientAnim = "wash"
     transientTimer.restart()
-    if (dirtLevel === 0) flushPet()
+    // The reward chime marks the moment it comes out all clean.
+    if (dirtLevel === 0) {
+      playSound("wash")
+      flushPet()
+    }
   }
 
   // The Tamagotchi farewell: the adult flies home, a new egg appears, and
@@ -292,6 +346,7 @@ Item {
     hatchedAtMs = Date.now()
     lastPetMs = hatchedAtMs
     flushPet()
+    playSound("farewell")
     notify("Omagotchi", "Your companion waved goodbye and flew home… a new egg appeared! (Gen " + generation + ")")
   }
 
@@ -300,6 +355,7 @@ Item {
     nowMs = lastPetMs
     lonelinessLevel = Math.max(0, lonelinessLevel - 10)
     boredomLevel = Math.max(0, boredomLevel - 10)
+    playSound("pet")
     flushPet()
   }
 
