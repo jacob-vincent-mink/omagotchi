@@ -130,6 +130,21 @@ Priorité aux formes qu'on voit longtemps : `child`, les 2 `teen_*`, puis les
 | `stunned` | après une grande chute | a, b |
 | `laptop` | **teens uniquement**, idle dans le panel | a, b |
 
+### P2,5 — la déco de la chambre (idée de Stella 21/08)
+
+Sprites `decor_<nom>.png` 16×16, affichés dans la chambre selon le stade
+(tamisés à 55 %, la chambre reste meublée quand il est en balade). Un sprite
+non dessiné ne s'affiche pas — livrable au fil de l'eau.
+
+| Stade | Sprites | Note |
+| --- | --- | --- |
+| Bébé | `decor_mobile` (suspendu, se balance), `decor_pacifier` | |
+| Enfant | `decor_ball` | |
+| Ado | `decor_poster` (poster Omarchy), `decor_sock` (chaussette sale) | placeholders Claude à redessiner |
+| Adulte | `decor_plant` | |
+
+Positions/tailles réglées dans `Panel.qml` (`stageDecor`) — faciles à ajuster.
+
 ### P3 — plus tard
 
 - Formes supplémentaires pour l'arbre Gen1 complet + le « special ».

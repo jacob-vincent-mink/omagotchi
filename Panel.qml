@@ -183,6 +183,75 @@ Panel {
             renderType: Text.NativeRendering
           }
 
+          // --- the decor ---------------------------------------------------
+          // Each life stage furnishes the room differently. Pieces are
+          // 16×16 decor_<name>.png sprites; one that is not drawn yet simply
+          // does not render, so the set can grow sprite by sprite. x/y are
+          // fractions of the room, size is in Style.space units. The room
+          // stays furnished while the pet is out playing.
+          readonly property var stageDecor: ({
+            baby: [
+              { name: "mobile", x: 0.08, y: 0.04, size: 48, sway: true },
+              { name: "pacifier", x: 0.80, y: 0.72, size: 28 }
+            ],
+            child: [
+              { name: "ball", x: 0.79, y: 0.64, size: 36 }
+            ],
+            teen: [
+              { name: "poster", x: 0.74, y: 0.07, size: 52 },
+              { name: "sock", x: 0.11, y: 0.76, size: 28 }
+            ],
+            adult: [
+              { name: "plant", x: 0.80, y: 0.48, size: 56 }
+            ]
+          })
+
+          Repeater {
+            model: root.ready ? (petRoom.stageDecor[root.petService.stage] || []) : []
+            delegate: Item {
+              id: decorItem
+              required property var modelData
+              x: petRoom.width * modelData.x
+              y: petRoom.height * modelData.y
+              width: Style.space(modelData.size)
+              height: Style.space(modelData.size)
+              visible: decorImage.status === Image.Ready
+
+              // A hanging piece sways gently around its attachment point.
+              property real swayAngle: 0
+              transform: Rotation {
+                origin.x: decorItem.width / 2
+                origin.y: 0
+                angle: decorItem.swayAngle
+              }
+              SequentialAnimation {
+                running: decorItem.visible && decorItem.modelData.sway === true
+                loops: Animation.Infinite
+                NumberAnimation { target: decorItem; property: "swayAngle"
+                  to: 5; duration: 1900; easing.type: Easing.InOutSine }
+                NumberAnimation { target: decorItem; property: "swayAngle"
+                  to: -5; duration: 1900; easing.type: Easing.InOutSine }
+              }
+
+              Image {
+                id: decorImage
+                anchors.fill: parent
+                source: Qt.resolvedUrl("assets/sprites/decor_" + decorItem.modelData.name + ".png")
+                smooth: false
+                fillMode: Image.PreserveAspectFit
+                visible: false
+              }
+              MultiEffect {
+                anchors.fill: decorImage
+                source: decorImage
+                colorization: 1
+                colorizationColor: Color.accent
+                // Furniture stays in the background: dimmer than the pet.
+                opacity: 0.55
+              }
+            }
+          }
+
           PetSprite {
             id: bigPet
             anchors.centerIn: parent
