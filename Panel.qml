@@ -185,24 +185,26 @@ Panel {
 
           // --- the decor ---------------------------------------------------
           // Each life stage furnishes the room differently. Pieces are
-          // 16×16 decor_<name>.png sprites; one that is not drawn yet simply
-          // does not render, so the set can grow sprite by sprite. x/y are
-          // fractions of the room, size is in Style.space units. The room
-          // stays furnished while the pet is out playing.
+          // decor_<name>.png sprites of ANY size (pets are 16×16 but decor
+          // may be bigger, even rectangular); one that is not drawn yet
+          // simply does not render, so the set can grow sprite by sprite.
+          // x/y are fractions of the room; px is the integer zoom applied to
+          // the sprite's own pixels, so the pixel grid stays crisp whatever
+          // the canvas size. The room stays furnished while the pet is out.
           readonly property var stageDecor: ({
             baby: [
-              { name: "mobile", x: 0.08, y: 0.04, size: 48, sway: true },
-              { name: "pacifier", x: 0.80, y: 0.72, size: 28 }
+              { name: "mobile", x: 0.08, y: 0.04, px: 3, sway: true },
+              { name: "pacifier", x: 0.80, y: 0.72, px: 2 }
             ],
             child: [
-              { name: "ball", x: 0.79, y: 0.64, size: 36 }
+              { name: "ball", x: 0.79, y: 0.64, px: 2 }
             ],
             teen: [
-              { name: "poster", x: 0.74, y: 0.07, size: 52 },
-              { name: "sock", x: 0.11, y: 0.76, size: 28 }
+              { name: "poster", x: 0.74, y: 0.07, px: 3 },
+              { name: "sock", x: 0.11, y: 0.76, px: 2 }
             ],
             adult: [
-              { name: "plant", x: 0.80, y: 0.48, size: 56 }
+              { name: "plant", x: 0.80, y: 0.48, px: 3 }
             ]
           })
 
@@ -213,8 +215,10 @@ Panel {
               required property var modelData
               x: petRoom.width * modelData.x
               y: petRoom.height * modelData.y
-              width: Style.space(modelData.size)
-              height: Style.space(modelData.size)
+              width: Style.space(decorImage.status === Image.Ready
+                ? decorImage.implicitWidth * modelData.px : 0)
+              height: Style.space(decorImage.status === Image.Ready
+                ? decorImage.implicitHeight * modelData.px : 0)
               visible: decorImage.status === Image.Ready
 
               // A hanging piece sways gently around its attachment point.
@@ -238,7 +242,6 @@ Panel {
                 anchors.fill: parent
                 source: Qt.resolvedUrl("assets/sprites/decor_" + decorItem.modelData.name + ".png")
                 smooth: false
-                fillMode: Image.PreserveAspectFit
                 visible: false
               }
               MultiEffect {

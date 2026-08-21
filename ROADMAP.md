@@ -132,9 +132,13 @@ Priorité aux formes qu'on voit longtemps : `child`, les 2 `teen_*`, puis les
 
 ### P2,5 — la déco de la chambre (idée de Stella 21/08)
 
-Sprites `decor_<nom>.png` 16×16, affichés dans la chambre selon le stade
-(tamisés à 55 %, la chambre reste meublée quand il est en balade). Un sprite
-non dessiné ne s'affiche pas — livrable au fil de l'eau.
+Sprites `decor_<nom>.png` de **taille libre** (16×16 pour les petits objets,
+24×24 ou 32×32 pour le poster/mobile détaillés, rectangles OK — ex. poster
+16×24 portrait), affichés dans la chambre selon le stade (tamisés à 55 %, la
+chambre reste meublée quand il est en balade). Un sprite non dessiné ne
+s'affiche pas — livrable au fil de l'eau. `gen-sprites.sh` lit la taille de
+la grille tout seul ; le zoom entier par pièce (`px`) se règle dans
+`stageDecor` (Panel.qml).
 
 | Stade | Sprites | Note |
 | --- | --- | --- |
