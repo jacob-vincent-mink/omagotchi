@@ -193,28 +193,44 @@ Panel {
           // the canvas size. The room stays furnished while the pet is out.
           readonly property var stageDecor: ({
             baby: [
-              { name: "mobile", x: 0.08, y: 0.04, px: 3, sway: true },
-              { name: "pacifier", x: 0.80, y: 0.72, px: 2 }
+              { name: "mobile", x: 0.08, y: 0.04, px: 2, sway: true }
             ],
             child: [
-              { name: "ball", x: 0.79, y: 0.64, px: 2 }
+              { name: "ball", x: 0.79, y: 0.64, px: 1 }
             ],
-            teen: [
-              { name: "poster", x: 0.74, y: 0.07, px: 3 },
+            teen_neat: [
+              { name: "poster", x: 0.72, y: 0.08, px: 2 },
+              { name: "controller", x: 0.11, y: 0.76, px: 2 }
+            ],
+            teen_scruffy: [
+              { name: "poster", x: 0.72, y: 0.08, px: 2 },
               { name: "sock", x: 0.11, y: 0.76, px: 2 }
             ],
-            adult: [
-              { name: "plant", x: 0.80, y: 0.48, px: 3 }
+            adult_gremlin: [
+              { name: "plant_gremlin", x: 0.80, y: 0.48, px: 3 }
+            ],
+            adult_ok: [
+              { name: "plant_ok", x: 0.80, y: 0.48, px: 3 }
+            ],
+            adult_ace: [
+              { name: "plant_ace", x: 0.80, y: 0.48, px: 1 }
             ]
           })
 
+          // Form-specific decor wins over the shared stage decor.
           Repeater {
-            model: root.ready ? (petRoom.stageDecor[root.petService.stage] || []) : []
+            model: root.ready
+              ? (petRoom.stageDecor[root.petService.form]
+                 || petRoom.stageDecor[root.petService.stage] || [])
+              : []
             delegate: Item {
               id: decorItem
               required property var modelData
-              x: petRoom.width * modelData.x
-              y: petRoom.height * modelData.y
+              // Clamped so a large sprite can never spill past the room walls.
+              x: Math.min(petRoom.width * modelData.x,
+                          petRoom.width - decorItem.width - Style.space(6))
+              y: Math.min(petRoom.height * modelData.y,
+                          petRoom.height - decorItem.height - Style.space(6))
               width: Style.space(decorImage.status === Image.Ready
                 ? decorImage.implicitWidth * modelData.px : 0)
               height: Style.space(decorImage.status === Image.Ready

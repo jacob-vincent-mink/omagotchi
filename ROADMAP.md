@@ -142,10 +142,11 @@ la grille tout seul ; le zoom entier par pièce (`px`) se règle dans
 
 | Stade | Sprites | Note |
 | --- | --- | --- |
-| Bébé | `decor_mobile` (suspendu, se balance), `decor_pacifier` | |
-| Enfant | `decor_ball` | |
-| Ado | `decor_poster` (poster Omarchy), `decor_sock` (chaussette sale) | placeholders Claude à redessiner |
-| Adulte | `decor_plant` | |
+| Bébé | `decor_mobile` ✅ 32×32 (sway; **animation orbite des branches à faire**, cf. étoiles du stun) | pacifier abandonné |
+| Enfant | `decor_ball` ✅ 32×32 | |
+| Ado propre | `decor_poster` ✅, `decor_controller` ✅ (manette) | |
+| Ado crado | `decor_poster` ✅, `decor_sock` ✅ (chaussette sale) | |
+| Adulte | `decor_plant_gremlin` ✅ (cactus), `decor_plant_ok` ✅, `decor_plant_ace` ✅ (bonsaï 32×32) | déco **par forme** : `stageDecor` accepte une clé forme (`adult_ace`…) qui prime sur la clé stade |
 
 Positions/tailles réglées dans `Panel.qml` (`stageDecor`) — faciles à ajuster.
 
@@ -167,7 +168,8 @@ Positions/tailles réglées dans `Panel.qml` (`stageDecor`) — faciles à ajust
 | — | Bonus 20/08 : grab & carry, session de câlins, frottage hygiène, panel (chambre vide en balade, Zzz, boutons alignés) | Claude | ✅ |
 | 4 | Sons optionnels (setting + placeholders repris du tomato-timer, voir CREDITS.md) | Claude | ✅ 21/08 |
 | — | Bonus 21/08 : sortie animée du panel (glisse + chute derrière la carte) + faisceau tracteur aller/retour 🛸 | Claude | ✅ |
-| 5 | Sprites P1 : sleep des 8 formes (elle avait oublié le dodo ^^) + redraw éventuel idle/walk | **Stella** | ⏳ |
+| 5 | Sprites P1 : sleep des 7 formes + déco (mobile, ball, controller, plants, poster, sock) | **Stella** | ✅ 21/08 |
+| 5b | Animation orbite du mobile (bébé) + anims `eat` (Stella) + bruitages définitifs (Stella) | ensemble | ⏳ 22/08 |
 | 6 | Bulles P1,5 | **Stella** | ✅ les 6 faites le 20/08 |
 | 7 | Laptop de l'ado dans le panel | Claude (dès sprites teen) | ⏳ |
 | 8 | Sprites P2 (eat, wash, climb, stunned, laptop, états) | **Stella** | ⏳ |
