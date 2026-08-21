@@ -368,6 +368,10 @@ Item {
     sleeping = false
     hatchedAtMs = Date.now()
     lastPetMs = hatchedAtMs
+    // The adult may leave from outdoors; the egg must not inherit a stale
+    // "out playing" state (disabled Come home button, surprise exit at
+    // the child stage).
+    updateSettings({ roamEnabled: false })
     flushPet()
     playSound("farewell")
     notify("Omagotchi", "Your companion waved goodbye and flew home… a new egg appeared! (Gen " + generation + ")")
