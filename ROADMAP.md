@@ -47,9 +47,9 @@ se plaint (humeur + gigote dans la barre) à partir de **60**.
 | --- | --- | --- | --- | --- |
 | Faim | +0,33/min | ~5 h 03 | updates en attente → +0,5/min ; ×stade (§3) | bouton Feed (à la maison uniquement) |
 | Hygiène | +0,21/min | ~7 h 56 | orphelins pacman → +0,33/min ; ×stade | **frotter à la souris** dans sa chambre (0,03 pt/px, gigote + étincelles) |
-| Énergie (fatigue) | +0,28/min éveillé | ~6 h (s'endort à 90) | balade → +0,55/min ; ×stade | sieste auto : −2,2/min, réveil à ≤ 5 (~39 min) |
+| Énergie (fatigue) | +0,28/min éveillé | ~6 h (s'endort à 90) | balade → +0,55/min ; ×stade | sieste auto : −2,2/min, réveil à ≤ 5 (~39 min) ; s'endort dès 60 quand on le fait rentrer ; nourrir/laver le réveille puis il se rendort si encore fatigué |
 | Fun (ennui) | +0,45/min | ~3 h 42 | balade → **−2/min** ; ×stade | sortir se balader (caresse : −10) |
-| Affection | +0,12/min | ~14 h actives | — | **session de câlins** : −10 par caresse |
+| Affection | +0,12/min | ~14 h actives | chute sonnée → **+10** (l'anti-câlin) | **session de câlins** : −10 par caresse |
 
 Bulles d'emote : si plusieurs besoins ≥ 60, la bulle alterne toutes les 3 s.
 Stun : 3 étoiles (`emote_stunned.png`) en orbite code, pas de bulle.

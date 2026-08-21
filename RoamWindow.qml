@@ -290,7 +290,7 @@ PanelWindow {
               && root.petY - root.fallStartY > root.height * root.stunFallFraction) {
             root.action = "stunned"
             stunTimer.restart()
-            if (root.petService) root.petService.playSound("stun")
+            if (root.petService) root.petService.stunShock()
           } else {
             root.action = "idle"
           }

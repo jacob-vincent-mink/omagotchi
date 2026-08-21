@@ -116,7 +116,18 @@ Item {
   Timer {
     id: transientTimer
     interval: 2500
-    onTriggered: root.transientAnim = ""
+    onTriggered: {
+      root.transientAnim = ""
+      // Woken up for a meal or a bath but still sleepy? Back to bed.
+      if (root.wokenForCare) {
+        root.wokenForCare = false
+        if (root.tirednessLevel >= 60 && !root.roaming) {
+          root.sleeping = true
+          root.playSound("sleep")
+          root.flushPet()
+        }
+      }
+    }
   }
 
   // The shared emote bubbles, one glyph per complaining need. When several
@@ -305,7 +316,18 @@ Item {
 
   // --- actions ---------------------------------------------------------------
 
+  // Care wakes a sleeping pet first; once the fuss is over it dozes back
+  // off if it is still sleepy (see transientTimer).
+  property bool wokenForCare: false
+
+  function wakeForCare() {
+    if (!sleeping) return
+    sleeping = false
+    wokenForCare = true
+  }
+
   function feedNow() {
+    wakeForCare()
     hungerLevel = 0
     transientAnim = "eat"
     transientTimer.restart()
@@ -317,6 +339,7 @@ Item {
   // dirt comes off progressively. Persisted by the caller on gesture end.
   function scrub(amount) {
     if (dirtLevel <= 0) return
+    wakeForCare()
     dirtLevel = Math.max(0, dirtLevel - amount)
     transientAnim = "wash"
     transientTimer.restart()
@@ -361,6 +384,20 @@ Item {
 
   function setRoamEnabled(value) {
     updateSettings({ roamEnabled: value === true })
+    // Brought home already sleepy? Straight to bed — no need to hit rock
+    // bottom first.
+    if (value !== true && !sleeping && tirednessLevel >= 60) {
+      sleeping = true
+      playSound("sleep")
+      flushPet()
+    }
+  }
+
+  // A big fall hurts its feelings too: the inverse of a petting.
+  function stunShock() {
+    lonelinessLevel = Math.min(100, lonelinessLevel + 10)
+    playSound("stun")
+    flushPet()
   }
 
   function updateSettings(patch) {
