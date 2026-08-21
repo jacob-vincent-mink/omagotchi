@@ -464,9 +464,10 @@ Item {
       }
       sleeping = pet.sleeping === true
     } catch (petError) { hatchedAtMs = 0; lastPetMs = 0 }
-    // A corrupt or hand-edited form falls back to a fresh egg rather than a
-    // broken sprite path.
-    if (knownForms.indexOf(form) < 0) {
+    // A corrupt or hand-edited form or stage falls back to a fresh egg
+    // rather than a broken sprite path or NaN-poisoned need rates.
+    if (knownForms.indexOf(form) < 0
+        || ["egg", "baby", "child", "teen", "adult"].indexOf(stage) < 0) {
       stage = "egg"
       form = "egg"
       ageMinutes = 0

@@ -8,8 +8,9 @@ out="../../assets/sprites"
 
 for txt in *.txt; do
   name="${txt%.txt}"
-  { echo "P1"; echo "16 16"; tr 'X.' '10' < "$txt"; } > "/tmp/omagotchi-$name.pbm"
-  magick "/tmp/omagotchi-$name.pbm" -transparent white -fill '#FFFFFF' -opaque black "PNG32:$out/$name.png"
-  rm "/tmp/omagotchi-$name.pbm"
+  pbm="$name.pbm"  # next to the grids, gitignored — no shared /tmp
+  { echo "P1"; echo "16 16"; tr 'X.' '10' < "$txt"; } > "$pbm"
+  magick "$pbm" -transparent white -fill '#FFFFFF' -opaque black "PNG32:$out/$name.png"
+  rm "$pbm"
   echo "$out/$name.png"
 done

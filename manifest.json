@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "author": "SLcode777",
   "license": "MIT",
-  "description": "A 1-bit desktop pet you care for through real system maintenance: feed it with updates, groom it by pruning orphans, rest it with a reboot, pet it, and let it roam the bottom of your screen.",
+  "description": "A 1-bit desktop pet in your bar, in the spirit of the 1997 originals: feed it, scrub it clean, cuddle it, and let it out to roam your screen and climb your windows. It hatches, grows, and evolves with the care you give.",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",

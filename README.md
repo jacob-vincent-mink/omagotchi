@@ -101,8 +101,10 @@ strings, and none of them elevate privileges:
 - `pw-play` — plays the bundled sound effects (only when sound is enabled)
 
 Window positions for climbing are read from the Hyprland IPC socket via
-Quickshell's Hyprland module — no shell commands involved. No network access,
-no credentials, no daemons, no sudoers rules.
+Quickshell's Hyprland module — no shell commands involved. The plugin itself
+opens no sockets and downloads nothing; note that `checkupdates` fetches repo
+databases over the network into its own private database copy, as it always
+does. No credentials, no daemons, no sudoers rules.
 
 ## Drawing new sprites
 
