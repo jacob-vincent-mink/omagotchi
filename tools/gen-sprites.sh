@@ -7,8 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/sprites"
 out="../../assets/sprites"
 
-for txt in *.txt; do
-  name="${txt%.txt}"
+for txt in ./*.txt; do
+  name="${txt#./}"; name="${name%.txt}"
   w=$(head -1 "$txt" | tr -d '\n' | wc -c)
   h=$(grep -c . "$txt")
   pbm="$name.pbm"  # next to the grids, gitignored — no shared /tmp

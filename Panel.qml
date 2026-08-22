@@ -94,6 +94,7 @@ Panel {
     petService.handoffY = cardBottom
     petService.handoffScreen = panelScreen ? panelScreen.name : ""
     petService.returnRequested = true
+    petService.playBeamSound(true)
   }
 
   Connections {
@@ -113,6 +114,7 @@ Panel {
     if (exiting || !ready) return
     petService.wakeUp()
     exiting = true
+    petService.playBeamSound()
     var start = petRoom.mapToItem(exitOverlay,
       (petRoom.width - exitPet.width) / 2, (petRoom.height - exitPet.height) / 2)
     exitPet.x = start.x
@@ -422,9 +424,16 @@ Panel {
               lastX = mouse.x
               lastY = mouse.y
               travel += moved
-              if (!scrubbing && travel > 12) scrubbing = true
+              if (!scrubbing && travel > 12) {
+                scrubbing = true
+                if (root.ready && root.petService.dirtiness > 0) {
+                  root.petService.playSound("wash")
+                  scrubSoundTimer.restart()
+                }
+              }
               if (scrubbing && root.ready && root.petService.dirtiness > 0) {
                 root.petService.scrub(moved * 0.03)
+                if (root.petService.dirtiness <= 0) scrubSoundTimer.stop()
                 travelSinceSparkle += moved
                 if (travelSinceSparkle > 50) {
                   travelSinceSparkle = 0
@@ -434,7 +443,17 @@ Panel {
                 }
               }
             }
+            // The scrubbing clip is ~3 s: keep it going for as long as the
+            // rubbing lasts and there is dirt left.
+            Timer {
+              id: scrubSoundTimer
+              interval: 3000
+              repeat: true
+              onTriggered: root.petService.playSound("wash")
+            }
+
             onReleased: {
+              scrubSoundTimer.stop()
               if (scrubbing) {
                 if (root.ready) root.petService.flushPet()
               } else {
@@ -601,6 +620,7 @@ Panel {
         Button {
           anchors.horizontalCenter: parent.horizontalCenter
           visible: root.ready && root.petService.stage === "adult"
+            && !root.petService.farewellPending
           text: "Let it go"
           tooltipText: "Say goodbye — a new egg will appear (Gen "
             + (root.ready ? root.petService.generation + 1 : 2) + ")"
@@ -680,7 +700,8 @@ Panel {
                   tooltipText: needRow.modelData.actionTip
                   fontFamily: root.fontFamily
                   enabled: root.ready
-                    && (needRow.modelData.action !== "roam" || root.petService.canRoam)
+                    && (needRow.modelData.action !== "roam"
+                        || (root.petService.canRoam && !root.petService.farewellPending))
                     && (needRow.modelData.action !== "feed"
                         || (root.petService.stage !== "egg" && !root.petService.eating))
                     && (needRow.modelData.needsHome !== true || !root.petIsOut)
@@ -692,16 +713,66 @@ Panel {
           }
         }
 
-        Button {
+        // --- sound ---------------------------------------------------------
+        // A speaker button; click it to unfold the effects volume slider.
+        Column {
+          id: soundControl
           anchors.horizontalCenter: parent.horizontalCenter
-          text: root.ready && root.petService.settings.soundEnabled === true
-            ? "Sound: on" : "Sound: off"
-          tooltipText: "Toggle the pet's sound effects"
-          fontFamily: root.fontFamily
-          enabled: root.ready
-          onClicked: root.petService.updateSettings({
-            soundEnabled: !(root.petService.settings.soundEnabled === true)
-          })
+          spacing: Style.space(6)
+          property bool open: false
+          readonly property real volume: root.ready ? root.petService.soundVolume : 0.5
+
+          PanelActionButton {
+            id: soundButton
+            anchors.horizontalCenter: parent.horizontalCenter
+            // Nerd Font speaker glyphs (nf-md-volume_off/low/medium/high), by
+            // code point so the icons survive any editor or tool that strips
+            // private-use characters.
+            iconText: String.fromCodePoint(soundControl.volume <= 0 ? 0xF0581
+              : soundControl.volume < 0.34 ? 0xF057F
+              : soundControl.volume < 0.67 ? 0xF0580 : 0xF057E)
+            tooltipText: soundControl.open ? "Hide the volume slider" : "Sound effects volume"
+            fontFamily: root.fontFamily
+            foreground: root.foreground
+            bordered: true
+            enabled: root.ready
+            onClicked: soundControl.open = !soundControl.open
+          }
+
+          Row {
+            visible: soundControl.open
+            spacing: Style.space(8)
+            anchors.horizontalCenter: parent.horizontalCenter
+
+            PanelSlider {
+              id: volumeSlider
+              bar: root.bar
+              width: Style.space(180)
+              anchors.verticalCenter: parent.verticalCenter
+              minimum: 0
+              maximum: 1
+              step: 0.05
+              value: soundControl.volume
+              // Persist on release, and let it be heard right away.
+              onReleased: function(v) {
+                root.petService.updateSettings({ soundVolume: v })
+                Qt.callLater(function() { root.petService.playSound("pet") })
+              }
+              onRightClicked: root.petService.updateSettings({
+                soundVolume: soundControl.volume > 0 ? 0 : 0.5 })
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              width: Style.space(36)
+              horizontalAlignment: Text.AlignRight
+              text: Math.round((volumeSlider.dragging ? volumeSlider.liveValue
+                : soundControl.volume) * 100) + "%"
+              color: Qt.alpha(root.foreground, 0.7)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              renderType: Text.NativeRendering
+            }
+          }
         }
 
       }
@@ -770,11 +841,14 @@ Panel {
       ConfirmDialog {
         id: farewellConfirm
         anchors.fill: parent
-        message: "Let your companion go? It will fly home, and a new egg will appear."
+        message: "Let your companion go? It will head out into the big wide world, and a new egg will appear."
         confirmText: "Say goodbye"
         onConfirmed: {
           opened = false
-          if (root.ready) root.petService.sendOff()
+          if (!root.ready) return
+          root.petService.beginFarewell()
+          // From home it first has to get outside — the usual way out.
+          if (!root.petIsOut) root.beginExit()
         }
         onCanceled: opened = false
       }

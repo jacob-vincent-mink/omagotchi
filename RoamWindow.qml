@@ -303,13 +303,68 @@ PanelWindow {
     }
   }
 
+  // --- the farewell walk -----------------------------------------------------
+  // Phases: 0 get down to the floor and head for the nearest corner,
+  // 1 arrived — say goodbye, 2 walk off the screen, then the service
+  // hatches the next generation.
+  property int leavingPhase: 0
+  property real leavingCornerX: 0
+
+  function advanceFarewell() {
+    var svc = petService
+    if (!svc || !svc.farewellPending) { leavingPhase = 0; return }
+    if (action !== "idle") return
+    if (leavingPhase === 0) {
+      if (support) { startFall(); return }
+      leavingCornerX = petX + spriteSize / 2 < width / 2 ? 0 : width - spriteSize
+      leavingPhase = 1
+      if (Math.abs(leavingCornerX - petX) > 1) startWalkTo(leavingCornerX, null)
+    } else if (leavingPhase === 1) {
+      leavingPhase = 2
+      facingLeft = leavingCornerX > 0
+      svc.playSound(svc.farewellSoundEvent())
+      goodbyeTimer.restart()
+    } else if (leavingPhase === 3) {
+      leavingPhase = 0
+      svc.sendOff()
+    }
+  }
+
+  Timer {
+    id: goodbyeTimer
+    interval: 1800
+    onTriggered: {
+      if (root.leavingPhase !== 2) return
+      root.leavingPhase = 3
+      // Past the clamp on purpose: the target is just beyond the edge.
+      root.targetX = root.leavingCornerX > 0 ? root.width + 4 : -root.spriteSize - 4
+      root.facingLeft = root.leavingCornerX === 0
+      root.pendingClimb = null
+      root.action = "walk"
+    }
+  }
+
+  Timer {
+    interval: 200
+    running: root.visible && !!root.petService && root.petService.farewellPending
+    repeat: true
+    onTriggered: root.advanceFarewell()
+  }
+
+  Connections {
+    target: root.petService
+    function onFarewellPendingChanged() {
+      if (!root.petService.farewellPending) root.leavingPhase = 0
+    }
+  }
+
   // --- the wandering brain ---------------------------------------------------
 
   Timer {
     id: brain
     interval: 1500
     running: root.visible && root.action === "idle"
-      && !(root.petService && root.petService.sleeping)
+      && !(root.petService && (root.petService.sleeping || root.petService.farewellPending))
     repeat: true
     onTriggered: {
       interval = 2500 + Math.floor(Math.random() * 5000)
@@ -407,7 +462,7 @@ PanelWindow {
   // and the real height only arrives once the surface is mapped, so the floor
   // glue keeps the pet grounded instead of hovering at y 0.
   Component.onCompleted: resetPosition()
-  onVisibleChanged: if (visible) resetPosition()
+  onVisibleChanged: { if (visible) resetPosition(); else leavingPhase = 0 }
   onFloorYChanged: {
     if (action === "idle" && !support && Math.abs(petY - floorY) > 1)
       petY = floorY
@@ -498,6 +553,7 @@ PanelWindow {
       // A stunned pet is too dizzy to be petted or picked up, and the
       // tractor beam's pull is irresistible.
       enabled: root.action !== "stunned" && root.action !== "beamup"
+        && !(root.petService && root.petService.farewellPending)
       cursorShape: root.action === "held" ? Qt.ClosedHandCursor : Qt.PointingHandCursor
 
       property real grabDx: 0

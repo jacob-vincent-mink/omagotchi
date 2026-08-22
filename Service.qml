@@ -28,8 +28,13 @@ Item {
   readonly property var defaultSettings: ({
     roamEnabled: false,
     roamScale: 3,
-    soundEnabled: true
+    soundVolume: 0.5
   })
+  // Effects volume, 0 (mute) to 1.
+  readonly property real soundVolume: {
+    var v = Number(settings.soundVolume)
+    return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5
+  }
   property var settings: defaultSettings
 
   // --- persistent pet facts --------------------------------------------------
@@ -121,14 +126,22 @@ Item {
 
   function endCare() {
     transientAnim = ""
-    // Woken up for a meal or a bath but still sleepy? Back to bed.
+    // Woken up for a meal or a bath? It stays up a little while, then goes
+    // back to bed if it is still sleepy.
     if (wokenForCare) {
       wokenForCare = false
-      if (tirednessLevel >= 60 && !roaming) {
-        sleeping = true
-        playSound("sleep")
-        flushPet()
-      }
+      resleepTimer.restart()
+    }
+  }
+  Timer {
+    id: resleepTimer
+    interval: 60000
+    onTriggered: {
+      if (root.sleeping || root.tirednessLevel < 60 || root.roaming
+          || root.eating || root.transientAnim !== "") return
+      root.sleeping = true
+      root.playSound("sleep")
+      root.flushPet()
     }
   }
 
@@ -238,6 +251,9 @@ Item {
     if (stage === "egg") return // an egg has no needs yet
     var rates = stageRates[stage] || stageRates.adult
 
+    // Out and about, it hums to itself once or twice an hour.
+    if (roaming && !sleeping && Math.random() < 1.5 / 60) playSound("hum")
+
     hungerLevel = Math.min(100,
       hungerLevel + (pendingUpdates > 0 ? 0.5 : 0.33) * rates.hunger)
     dirtLevel = Math.min(100,
@@ -297,16 +313,23 @@ Item {
   // One short clip per event, named after the event so better sounds can be
   // dropped in without touching code. The current set is placeholders reused
   // from the tomato-timer plugin's library — see CREDITS.md.
+  // One file per event, or a list to pick from at random (see CREDITS.md).
   readonly property var eventSounds: ({
-    hatch: "hatch.mp3",
-    evolve: "evolve.mp3",
+    hatch: "hatch.wav",
+    evolve: "evolve.wav",
     eat: "eat.wav",
-    wash: "wash.mp3",
-    pet: "pet.mp3",
-    sleep: "sleep.wav",
-    stun: "stun.wav",
-    farewell: "farewell.wav",
-    ball: "stun.wav" // placeholder until a real bounce is found
+    wash: "wash.wav",
+    pet: ["pet.wav", "pet2.wav"],
+    hum: "humming.wav",
+    sleep: "sleep.mp3",
+    stun: "stun.mp3",
+    land: "fall.wav",
+    beamCharge: "subbass.wav",
+    beam: "tractorbeam.wav",
+    ball: "balloon.wav",
+    farewell_ace: "farewell_ace.wav",
+    farewell_ok: "farewell_ok.mp3",
+    farewell_gremlin: "farewell_gremlin.mp3"
   })
 
   // pw-play wants a filesystem path, not a file:// URL.
@@ -317,10 +340,11 @@ Item {
   }
 
   function playSound(event) {
-    if (settings.soundEnabled !== true) return
+    if (soundVolume <= 0) return
     var file = eventSounds[event]
+    if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
     if (!file) return
-    Quickshell.execDetached(["pw-play", "--volume", "0.5",
+    Quickshell.execDetached(["pw-play", "--volume", soundVolume.toFixed(2),
       soundPath("sounds/" + file)])
   }
 
@@ -341,6 +365,7 @@ Item {
   property bool wokenForCare: false
 
   function wakeForCare() {
+    resleepTimer.stop()
     if (!sleeping) return
     sleeping = false
     wokenForCare = true
@@ -369,17 +394,29 @@ Item {
     transientAnim = "wash"
     transientTimer.interval = 2500
     transientTimer.restart()
-    // The reward chime marks the moment it comes out all clean.
-    if (dirtLevel === 0) {
-      playSound("wash")
-      flushPet()
-    }
+    if (dirtLevel === 0) flushPet()
   }
 
-  // The Tamagotchi farewell: the adult flies home, a new egg appears, and
+  // The Tamagotchi farewell: the adult sets off into the world, a new egg appears, and
   // the generation counter carries the legacy.
+  // Letting go is a little ceremony: the adult leaves its room (if home),
+  // walks to the nearest screen corner, says goodbye in its own voice and
+  // walks off the screen. Only then does the new egg appear.
+  property bool farewellPending: false
+
+  function beginFarewell() {
+    if (stage !== "adult" || farewellPending) return
+    wakeUp()
+    farewellPending = true
+  }
+
+  function farewellSoundEvent() {
+    return "farewell_" + form.replace("adult_", "")
+  }
+
   function sendOff() {
     if (stage !== "adult") return
+    farewellPending = false
     generation += 1
     stage = "egg"
     form = "egg"
@@ -399,13 +436,13 @@ Item {
     // the child stage).
     updateSettings({ roamEnabled: false })
     flushPet()
-    playSound("farewell")
-    notify("Omagotchi", "Your companion waved goodbye and flew home… a new egg appeared! (Gen " + generation + ")")
+    notify("Omagotchi", "Your companion said goodbye and walked off into the world… a new egg appeared! (Gen " + generation + ")")
   }
 
   // A deliberate wake-up — petting, grabbing, or sending it out — unlike
   // wakeForCare it does not tuck the pet back in afterwards.
   function wakeUp() {
+    resleepTimer.stop()
     if (!sleeping) return
     sleeping = false
     wokenForCare = false
@@ -434,17 +471,40 @@ Item {
   }
 
   // A big fall hurts its feelings too: the inverse of a petting.
+  // A big fall: the thud first, the dizzy jingle right after it.
   function stunShock() {
     lonelinessLevel = Math.min(100, lonelinessLevel + 10)
-    playSound("stun")
+    playSound("land")
+    stunSoundTimer.restart()
     flushPet()
+  }
+  Timer {
+    id: stunSoundTimer
+    interval: 450
+    onTriggered: root.playSound("stun")
+  }
+
+  // The tractor beam: a low thrum powering up, then the beam itself. On the
+  // way home it is mirrored: the beam plays out (~2.7 s), then the thrum.
+  function playBeamSound(homeward) {
+    beamSoundTimer.second = homeward ? "beamCharge" : "beam"
+    beamSoundTimer.interval = homeward ? 2700 : 650
+    playSound(homeward ? "beam" : "beamCharge")
+    beamSoundTimer.restart()
+  }
+  Timer {
+    id: beamSoundTimer
+    property string second: "beam"
+    onTriggered: root.playSound(second)
   }
 
   function updateSettings(patch) {
     var merged = {}
     for (var key in defaultSettings) merged[key] = defaultSettings[key]
-    for (var current in settings) merged[current] = settings[current]
-    for (var change in patch) merged[change] = patch[change]
+    // Only known keys survive a write: retired settings (soundEnabled…) drop
+    // out of the file on their own.
+    for (var current in settings) if (current in merged) merged[current] = settings[current]
+    for (var change in patch) if (change in merged) merged[change] = patch[change]
     settings = merged
     settingsFile.setText(JSON.stringify(settings, null, 2) + "\n")
   }
@@ -479,22 +539,25 @@ Item {
     } catch (error) { settings = defaultSettings }
 
     var hatch = false
+    // Persisted numbers must be finite and non-negative; anything else
+    // (NaN, Infinity, negatives, strings) reads as 0.
+    function num(v) { var n = Number(v); return isFinite(n) && n > 0 ? n : 0 }
     try {
       var pet = loadedPetText !== "" ? JSON.parse(loadedPetText) : {}
-      hatchedAtMs = Number(pet.hatchedAtMs) > 0 ? Number(pet.hatchedAtMs) : 0
-      lastPetMs = Number(pet.lastPetMs) > 0 ? Number(pet.lastPetMs) : 0
+      hatchedAtMs = num(pet.hatchedAtMs)
+      lastPetMs = num(pet.lastPetMs)
       stage = typeof pet.stage === "string" ? pet.stage : "egg"
       form = typeof pet.form === "string" ? pet.form : "egg"
-      ageMinutes = Number(pet.ageMinutes) > 0 ? Number(pet.ageMinutes) : 0
-      careSum = Number(pet.careSum) > 0 ? Number(pet.careSum) : 0
-      careCount = Number(pet.careCount) > 0 ? Math.round(Number(pet.careCount)) : 0
-      generation = Number(pet.generation) >= 1 ? Math.round(Number(pet.generation)) : 1
-      hungerLevel = Number(pet.hungerLevel) > 0 ? Number(pet.hungerLevel) : 0
-      dirtLevel = Number(pet.dirtLevel) > 0 ? Number(pet.dirtLevel) : 0
-      tirednessLevel = Number(pet.tirednessLevel) > 0 ? Number(pet.tirednessLevel) : 0
-      boredomLevel = Number(pet.boredomLevel) > 0 ? Number(pet.boredomLevel) : 0
+      ageMinutes = num(pet.ageMinutes)
+      careSum = num(pet.careSum)
+      careCount = Math.round(num(pet.careCount))
+      generation = Math.max(1, Math.round(num(pet.generation)))
+      hungerLevel = num(pet.hungerLevel)
+      dirtLevel = num(pet.dirtLevel)
+      tirednessLevel = num(pet.tirednessLevel)
+      boredomLevel = num(pet.boredomLevel)
       if (pet.lonelinessLevel !== undefined) {
-        lonelinessLevel = Number(pet.lonelinessLevel) > 0 ? Number(pet.lonelinessLevel) : 0
+        lonelinessLevel = num(pet.lonelinessLevel)
       } else {
         // Soft migration from the old wall-clock model: seed the stored level
         // from the time since the last petting.
@@ -530,7 +593,7 @@ Item {
   function updateSettingsInMemory(parsed) {
     var merged = {}
     for (var key in defaultSettings) merged[key] = defaultSettings[key]
-    for (var loaded in parsed) merged[loaded] = parsed[loaded]
+    for (var loaded in parsed) if (loaded in merged) merged[loaded] = parsed[loaded]
     settings = merged
   }
 
@@ -580,13 +643,14 @@ Item {
       if (root.careCount % 5 === 0) root.flushPet()
     }
   }
+  // Both probes only flavor the pace, so every 30 minutes is plenty (and
+  // checkupdates syncs its own db copy each time).
   Timer {
-    interval: 5 * 60 * 1000
+    interval: 30 * 60 * 1000
     running: root.initialized
     repeat: true
     onTriggered: orphansProc.running = true
   }
-  // checkupdates syncs its own db copy, so only every 30 minutes.
   Timer {
     interval: 30 * 60 * 1000
     running: root.initialized

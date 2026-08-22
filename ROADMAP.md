@@ -169,11 +169,11 @@ Positions/tailles réglées dans `Panel.qml` (`stageDecor`) — faciles à ajust
 | 4 | Sons optionnels (setting + placeholders repris du tomato-timer, voir CREDITS.md) | Claude | ✅ 21/08 |
 | — | Bonus 21/08 : sortie animée du panel (glisse + chute derrière la carte) + faisceau tracteur aller/retour 🛸 | Claude | ✅ |
 | 5 | Sprites P1 : sleep des 7 formes + déco (mobile, ball, controller, plants, poster, sock) | **Stella** | ✅ 21/08 |
-| 5b | Animation orbite du mobile (bébé) + anims `eat` (Stella) + bruitages définitifs (Stella) | ensemble | ⏳ 22/08 |
+| 5b | Animation orbite du mobile (bébé) + anims `eat` (Stella) + bruitages définitifs (Stella) | ensemble | ✅ 22/08 |
 | 6 | Bulles P1,5 | **Stella** | ✅ les 6 faites le 20/08 |
 | 7 | Laptop de l'ado dans le panel | Claude (dès sprites teen) | ⏳ |
-| 8 | Sprites P2 (eat, wash, climb, stunned, laptop, états) | **Stella** | ⏳ |
-| 9 | GIF de démo (escalade + grab + bain) + preview.png + README final | ensemble | ⏳ |
+| 8 | Sprites P2 (eat, wash, climb, stunned, laptop, états) | **Stella** | ✅ |
+| 9 | Preview.png + README final | ensemble | ⏳ |
 | 10 | Repo GitHub public, `omarchy plugin validate`, scan sécurité, soumission | ensemble | ⏳ |
 
 Règle de survie : à partir de samedi, on gèle les mécaniques et on ne fait
