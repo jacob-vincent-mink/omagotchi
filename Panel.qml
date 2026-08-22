@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Effects
+import QtQuick.Shapes
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -45,7 +46,9 @@ Panel {
         ? "rising faster: " + petService.pendingUpdates + " updates pending"
         : "rises over time",
       action: "feed", actionLabel: "Feed", needsHome: true,
-      actionTip: petIsOut ? "It's out playing — call it home first"
+      actionTip: petService.stage === "egg" ? "Still an egg — nothing to feed yet"
+        : petService.eating ? "Nom nom nom…"
+        : petIsOut ? "It's out playing — call it home first"
         : "A good meal, hunger back to zero" },
     { label: "Hygiene", value: petService.dirtiness,
       hint: petIsOut ? "wash it at home: press and scrub it with your mouse"
@@ -188,15 +191,21 @@ Panel {
           // decor_<name>.png sprites of ANY size (pets are 16×16 but decor
           // may be bigger, even rectangular); one that is not drawn yet
           // simply does not render, so the set can grow sprite by sprite.
-          // x/y are fractions of the room; px is the integer zoom applied to
-          // the sprite's own pixels, so the pixel grid stays crisp whatever
-          // the canvas size. The room stays furnished while the pet is out.
+          // x/y are fractions of the room; px is the zoom applied to the
+          // sprite's own pixels (integers keep the pixel grid crisp; 1.5 is
+          // tolerable on a dim piece). The room stays furnished while the
+          // pet is out.
           readonly property var stageDecor: ({
+            // beam = the shade's open edge in sprite pixels [x1, y1, x2, y2];
+            // a cone of light is cast from it onto the pet.
+            egg: [
+              { name: "lamp", x: 0.60, y: 0.04, px: 1.5, beam: [1, 13, 14, 25], shelf: true }
+            ],
             baby: [
               { name: "mobile", x: 0.08, y: 0.04, px: 2, sway: true }
             ],
             child: [
-              { name: "ball", x: 0.79, y: 0.64, px: 1 }
+              { name: "ball", x: 0.74, y: 0.52, px: 2, bounce: true }
             ],
             teen_neat: [
               { name: "poster", x: 0.72, y: 0.08, px: 2 },
@@ -230,7 +239,7 @@ Panel {
               x: Math.min(petRoom.width * modelData.x,
                           petRoom.width - decorItem.width - Style.space(6))
               y: Math.min(petRoom.height * modelData.y,
-                          petRoom.height - decorItem.height - Style.space(6))
+                          petRoom.height - decorItem.height - Style.space(6)) - hop
               width: Style.space(decorImage.status === Image.Ready
                 ? decorImage.implicitWidth * modelData.px : 0)
               height: Style.space(decorImage.status === Image.Ready
@@ -251,6 +260,92 @@ Panel {
                   to: 5; duration: 1900; easing.type: Easing.InOutSine }
                 NumberAnimation { target: decorItem; property: "swayAngle"
                   to: -5; duration: 1900; easing.type: Easing.InOutSine }
+              }
+
+              // A toy bounces when clicked: two hops, the second smaller.
+              property real hop: 0
+              SequentialAnimation {
+                id: bounceAnim
+                NumberAnimation { target: decorItem; property: "hop"
+                  to: Style.space(22); duration: 170; easing.type: Easing.OutQuad }
+                NumberAnimation { target: decorItem; property: "hop"
+                  to: 0; duration: 170; easing.type: Easing.InQuad }
+                NumberAnimation { target: decorItem; property: "hop"
+                  to: Style.space(8); duration: 110; easing.type: Easing.OutQuad }
+                NumberAnimation { target: decorItem; property: "hop"
+                  to: 0; duration: 110; easing.type: Easing.InQuad }
+              }
+              MouseArea {
+                anchors.fill: parent
+                enabled: decorItem.modelData.bounce === true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                  if (bounceAnim.running) return
+                  bounceAnim.start()
+                  root.petService.playSound("ball")
+                }
+              }
+
+              // Cone of light from a lamp's shade, aimed at the pet so the
+              // lamp can be nudged around and still light it. Drawn under
+              // the sprite; breathes slowly through the gradient alpha.
+              property bool lit: modelData.beam !== undefined
+              property real glow: 1
+              SequentialAnimation {
+                running: decorItem.visible && decorItem.lit
+                loops: Animation.Infinite
+                NumberAnimation { target: decorItem; property: "glow"
+                  to: 0.65; duration: 2600; easing.type: Easing.InOutSine }
+                NumberAnimation { target: decorItem; property: "glow"
+                  to: 1; duration: 2600; easing.type: Easing.InOutSine }
+              }
+              Shape {
+                id: lightCone
+                visible: decorItem.lit
+                anchors.fill: parent
+                preferredRendererType: Shape.CurveRenderer
+                readonly property real s: decorImage.implicitWidth > 0
+                  ? decorItem.width / decorImage.implicitWidth : 1
+                readonly property real ax: decorItem.lit ? decorItem.modelData.beam[0] * s : 0
+                readonly property real ay: decorItem.lit ? decorItem.modelData.beam[1] * s : 0
+                readonly property real bx: decorItem.lit ? decorItem.modelData.beam[2] * s : 0
+                readonly property real by: decorItem.lit ? decorItem.modelData.beam[3] * s : 0
+                readonly property real mx: (ax + bx) / 2
+                readonly property real my: (ay + by) / 2
+                readonly property real ex: bigPet.x + bigPet.width / 2 - decorItem.x
+                readonly property real ey: bigPet.y + bigPet.height / 2 - decorItem.y
+                readonly property real len: Math.max(1, Math.hypot(ex - mx, ey - my))
+                readonly property real ux: (ex - mx) / len
+                readonly property real uy: (ey - my) / len
+                readonly property real reach: len + bigPet.height * 0.45
+                readonly property real cx: mx + ux * reach
+                readonly property real cy: my + uy * reach
+                readonly property real halfW: bigPet.width * 0.55
+                ShapePath {
+                  strokeWidth: -1
+                  fillGradient: LinearGradient {
+                    x1: lightCone.mx; y1: lightCone.my
+                    x2: lightCone.cx; y2: lightCone.cy
+                    GradientStop { position: 0; color: Qt.alpha(Color.accent, 0.45 * decorItem.glow) }
+                    GradientStop { position: 1; color: Qt.alpha(Color.accent, 0) }
+                  }
+                  startX: lightCone.ax; startY: lightCone.ay
+                  PathLine { x: lightCone.bx; y: lightCone.by }
+                  PathLine { x: lightCone.cx + lightCone.uy * lightCone.halfW
+                             y: lightCone.cy - lightCone.ux * lightCone.halfW }
+                  PathLine { x: lightCone.cx - lightCone.uy * lightCone.halfW
+                             y: lightCone.cy + lightCone.ux * lightCone.halfW }
+                }
+              }
+
+              // A thin shelf under pieces that need something to stand on.
+              Rectangle {
+                visible: decorItem.modelData.shelf === true
+                x: decorItem.width * 0.15
+                y: decorItem.height
+                width: decorItem.width * 0.75
+                height: Style.space(2)
+                color: Qt.alpha(Color.accent, 0.55)
               }
 
               Image {
@@ -286,7 +381,7 @@ Panel {
                 return "laptop"
               return root.petService.stateAnim
             }
-            frameMs: 600
+            frameMs: anim === "eat" ? 350 : 600
             tint: Color.accent
 
             // Being scrubbed is wobbly business.
@@ -586,6 +681,8 @@ Panel {
                   fontFamily: root.fontFamily
                   enabled: root.ready
                     && (needRow.modelData.action !== "roam" || root.petService.canRoam)
+                    && (needRow.modelData.action !== "feed"
+                        || (root.petService.stage !== "egg" && !root.petService.eating))
                     && (needRow.modelData.needsHome !== true || !root.petIsOut)
                   opacity: enabled ? 1 : 0.4
                   onClicked: root.runAction(needRow.modelData.action)

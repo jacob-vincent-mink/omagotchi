@@ -461,7 +461,10 @@ PanelWindow {
     height: root.spriteSize
     x: root.petX
     y: root.petY - height
-    rotation: root.action === "climb" ? -90 : (root.action === "held" ? 12 : 0)
+    // Dedicated climb frames are drawn upright (back to us, arms reaching);
+    // only the walk-frame fallback needs the old -90° tilt.
+    rotation: root.action === "climb" && sprite.resolvedAnim !== "climb" ? -90
+      : (root.action === "held" ? 12 : 0)
     Behavior on rotation { NumberAnimation { duration: 150 } }
 
     readonly property bool asleep: root.petService && root.petService.sleeping

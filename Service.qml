@@ -116,17 +116,36 @@ Item {
   Timer {
     id: transientTimer
     interval: 2500
-    onTriggered: {
-      root.transientAnim = ""
-      // Woken up for a meal or a bath but still sleepy? Back to bed.
-      if (root.wokenForCare) {
-        root.wokenForCare = false
-        if (root.tirednessLevel >= 60 && !root.roaming) {
-          root.sleeping = true
-          root.playSound("sleep")
-          root.flushPet()
-        }
+    onTriggered: root.endCare()
+  }
+
+  function endCare() {
+    transientAnim = ""
+    // Woken up for a meal or a bath but still sleepy? Back to bed.
+    if (wokenForCare) {
+      wokenForCare = false
+      if (tirednessLevel >= 60 && !roaming) {
+        sleeping = true
+        playSound("sleep")
+        flushPet()
       }
+    }
+  }
+
+  // A meal is eaten bite by bite: hunger drains over ~6 s from full while
+  // the eat frames play, then a last chew before the animation ends.
+  readonly property bool eating: eatTimer.running
+  Timer {
+    id: eatTimer
+    interval: 100
+    repeat: true
+    onTriggered: {
+      root.hungerLevel = Math.max(0, root.hungerLevel - 100 / 60)
+      if (root.hungerLevel > 0) return
+      stop()
+      transientTimer.interval = 600
+      transientTimer.restart()
+      root.flushPet()
     }
   }
 
@@ -286,7 +305,8 @@ Item {
     pet: "pet.mp3",
     sleep: "sleep.wav",
     stun: "stun.wav",
-    farewell: "farewell.wav"
+    farewell: "farewell.wav",
+    ball: "stun.wav" // placeholder until a real bounce is found
   })
 
   // pw-play wants a filesystem path, not a file:// URL.
@@ -327,12 +347,17 @@ Item {
   }
 
   function feedNow() {
+    if (eating) return
     wakeForCare()
-    hungerLevel = 0
     transientAnim = "eat"
-    transientTimer.restart()
+    transientTimer.stop()
     playSound("eat")
-    flushPet()
+    if (hungerLevel > 0) eatTimer.restart()
+    else {
+      // Nothing to eat: a polite nibble, then back to whatever it was doing.
+      transientTimer.interval = 1200
+      transientTimer.restart()
+    }
   }
 
   // Washing is a scrubbing gesture: the panel feeds it mouse travel and the
@@ -342,6 +367,7 @@ Item {
     wakeForCare()
     dirtLevel = Math.max(0, dirtLevel - amount)
     transientAnim = "wash"
+    transientTimer.interval = 2500
     transientTimer.restart()
     // The reward chime marks the moment it comes out all clean.
     if (dirtLevel === 0) {
