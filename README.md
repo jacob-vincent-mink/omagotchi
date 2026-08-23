@@ -99,11 +99,14 @@ State files (safe to delete) live at:
 - `~/.local/state/omarchy/omagotchi-settings.json`
 - `~/.local/state/omarchy/omagotchi-state.json`
 
+If the state file turns out unreadable (corrupt, or over 64 KiB), the plugin
+warns you with a notification and starts over with a fresh egg.
+
 ## Dependencies
 
 - `pacman-contrib` for `checkupdates` (preinstalled on Omarchy)
 - `pipewire-audio` for `pw-play` sound effects (preinstalled on Omarchy)
-- `pacman` (base system) and `omarchy-notification-send` from Omarchy itself
+- `pacman` and `head` (coreutils) from the base system, `omarchy-notification-send` from Omarchy itself
 
 ## What it executes, exactly
 
@@ -114,6 +117,8 @@ strings, and none of them elevate privileges:
 - `pacman -Qdtq` — read-only, every 30 minutes: orphaned packages make hygiene drop faster
 - `omarchy-notification-send` — evolution and farewell announcements
 - `pw-play` — plays the bundled sound effects (unless the volume is at 0)
+- `head -c 65536` — reads the two state files once at startup, capped at
+  64 KiB each; an oversized or unreadable file falls back to defaults
 
 Window positions for climbing are read from the Hyprland IPC socket via
 Quickshell's Hyprland module — no shell commands involved. The plugin itself

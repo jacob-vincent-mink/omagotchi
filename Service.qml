@@ -74,10 +74,15 @@ Item {
   property double nowMs: Date.now()
 
   property bool initialized: false
+  // State files are read through `head -c` so a huge or symlinked file can
+  // never be pulled whole into the shell; the plugin writes a few hundred
+  // bytes, anything hitting the cap is treated as corrupt.
+  readonly property int maxStateBytes: 65536
   property bool settingsFileLoaded: false
   property bool petFileLoaded: false
   property string loadedSettingsText: ""
   property string loadedPetText: ""
+  property string petReadProblem: ""
 
   // --- derived needs ---------------------------------------------------------
 
@@ -536,9 +541,13 @@ Item {
     try {
       var parsedSettings = loadedSettingsText !== "" ? JSON.parse(loadedSettingsText) : {}
       updateSettingsInMemory(parsedSettings)
-    } catch (error) { settings = defaultSettings }
+    } catch (error) {
+      console.warn("omagotchi: settings file unreadable (" + error + "), using defaults")
+      settings = defaultSettings
+    }
 
     var hatch = false
+    var saveProblem = petReadProblem
     // Persisted numbers must be finite and non-negative; anything else
     // (NaN, Infinity, negatives, strings) reads as 0.
     function num(v) { var n = Number(v); return isFinite(n) && n > 0 ? n : 0 }
@@ -566,11 +575,15 @@ Item {
         lonelinessLevel = Math.min(100, hours / 24 * 100)
       }
       sleeping = pet.sleeping === true
-    } catch (petError) { hatchedAtMs = 0; lastPetMs = 0 }
+    } catch (petError) {
+      hatchedAtMs = 0; lastPetMs = 0
+      saveProblem = "not valid JSON (" + petError + ")"
+    }
     // A corrupt or hand-edited form or stage falls back to a fresh egg
     // rather than a broken sprite path or NaN-poisoned need rates.
     if (knownForms.indexOf(form) < 0
         || ["egg", "baby", "child", "teen", "adult"].indexOf(stage) < 0) {
+      if (saveProblem === "") saveProblem = "unknown stage/form " + stage + "/" + form
       stage = "egg"
       form = "egg"
       ageMinutes = 0
@@ -584,6 +597,11 @@ Item {
     }
 
     initialized = true
+    if (saveProblem !== "") {
+      console.warn("omagotchi: save file " + petPath + " " + saveProblem + " — starting over")
+      notify("Omagotchi couldn't read its save file",
+             "It was corrupt or oversized, so a fresh egg takes over.")
+    }
     if (hatch) flushPet()
 
     updatesProc.running = true
@@ -670,39 +688,57 @@ Item {
 
   // --- persistence -----------------------------------------------------------
 
-  FileView {
-    id: settingsFile
-    path: root.settingsPath
-    watchChanges: false
-    atomicWrites: true
-    printErrors: false
-    onLoaded: {
-      root.loadedSettingsText = text()
-      root.settingsFileLoaded = true
-      root.initializeIfReady()
-    }
-    onLoadFailed: {
-      root.loadedSettingsText = ""
+  // Bounded reads: at most maxStateBytes per file, once at startup. A file
+  // that fills the cap (or can't be read) counts as empty → defaults.
+  function boundedText(collector, exitCode) {
+    if (exitCode !== 0) return ""
+    var text = collector.text
+    return text.length >= maxStateBytes ? "" : text
+  }
+
+  Process {
+    id: settingsReader
+    command: ["head", "-c", String(root.maxStateBytes), root.settingsPath]
+    running: true
+    stdout: StdioCollector { id: settingsOut }
+    onExited: function(exitCode) {
+      root.loadedSettingsText = root.boundedText(settingsOut, exitCode)
       root.settingsFileLoaded = true
       root.initializeIfReady()
     }
   }
 
+  Process {
+    id: petReader
+    command: ["head", "-c", String(root.maxStateBytes), root.petPath]
+    running: true
+    stdout: StdioCollector { id: petOut }
+    onExited: function(exitCode) {
+      root.loadedPetText = root.boundedText(petOut, exitCode)
+      if (exitCode === 0 && petOut.text.length >= root.maxStateBytes)
+        root.petReadProblem = "exceeds " + root.maxStateBytes + " bytes"
+      root.petFileLoaded = true
+      root.initializeIfReady()
+    }
+  }
+
+  // Write-only views: preload off, text() is never called, so the shell
+  // never maps these files itself.
   FileView {
-    id: petFile
-    path: root.petPath
+    id: settingsFile
+    path: root.settingsPath
+    preload: false
     watchChanges: false
     atomicWrites: true
     printErrors: false
-    onLoaded: {
-      root.loadedPetText = text()
-      root.petFileLoaded = true
-      root.initializeIfReady()
-    }
-    onLoadFailed: {
-      root.loadedPetText = ""
-      root.petFileLoaded = true
-      root.initializeIfReady()
-    }
+  }
+
+  FileView {
+    id: petFile
+    path: root.petPath
+    preload: false
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
   }
 }
