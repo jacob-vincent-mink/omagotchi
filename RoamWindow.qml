@@ -19,12 +19,27 @@ PanelWindow {
 
   required property var petService
 
-  // The playground lives on the largest screen for now; a per-monitor pet (or
-  // a screen setting) is a possible follow-up.
+  // The output named by the roamScreen setting, if it is currently connected.
+  readonly property string preferredScreenName: {
+    var name = petService && petService.settings ? petService.settings.roamScreen : ""
+    return typeof name === "string" ? name : ""
+  }
+
+  // The playground: the screen named by roamScreen, else the largest one.
+  // Picking purely by area sends the pet to whichever monitor has the most
+  // pixels, which on a mixed desk (say a 4K above a couple of 1440p panels) is
+  // often not the one being worked on — the pet goes out to play on a screen
+  // you never glance at, and it looks like "Go play" did nothing at all.
   screen: {
-    var best = null
     var screens = Quickshell.screens
-    for (var i = 0; i < screens.length; i++) {
+    var i
+    if (preferredScreenName !== "") {
+      for (i = 0; i < screens.length; i++)
+        if (screens[i].name === preferredScreenName) return screens[i]
+      // Named screen unplugged: fall through rather than leave the pet homeless.
+    }
+    var best = null
+    for (i = 0; i < screens.length; i++) {
       if (!best || screens[i].width * screens[i].height > best.width * best.height)
         best = screens[i]
     }
