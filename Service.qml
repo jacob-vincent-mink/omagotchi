@@ -132,18 +132,18 @@ Item {
   function endCare() {
     transientAnim = ""
     // Woken up for a meal or a bath? It stays up a little while, then goes
-    // back to bed if it is still sleepy.
-    if (wokenForCare) {
-      wokenForCare = false
-      resleepTimer.restart()
-    }
+    // back to bed if it is still sleepy. The flag survives until the pet
+    // actually dozes back off, so chained cares (feed then wash) re-arm it.
+    if (wokenForCare) resleepTimer.restart()
   }
   Timer {
     id: resleepTimer
-    interval: 60000
+    interval: 30000
     onTriggered: {
-      if (root.sleeping || root.tirednessLevel < 60 || root.roaming
-          || root.eating || root.transientAnim !== "") return
+      // Mid-meal or mid-scrub: stay up, endCare re-arms the timer.
+      if (root.sleeping || root.eating || root.transientAnim !== "") return
+      root.wokenForCare = false
+      if (root.tirednessLevel < 60 || root.roaming) return
       root.sleeping = true
       root.playSound("sleep")
       root.flushPet()
@@ -370,6 +370,8 @@ Item {
   property bool wokenForCare: false
 
   function wakeForCare() {
+    // A pending doze interrupted by more care still counts as one to resume.
+    if (resleepTimer.running) wokenForCare = true
     resleepTimer.stop()
     if (!sleeping) return
     sleeping = false
@@ -447,8 +449,8 @@ Item {
   // A deliberate wake-up — petting, grabbing, or sending it out — unlike
   // wakeForCare it does not tuck the pet back in afterwards.
   function wakeUp() {
-    resleepTimer.stop()
     if (!sleeping) return
+    resleepTimer.stop()
     sleeping = false
     wokenForCare = false
     flushPet()
@@ -466,13 +468,10 @@ Item {
 
   function setRoamEnabled(value) {
     updateSettings({ roamEnabled: value === true })
-    // Brought home already sleepy? Straight to bed — no need to hit rock
-    // bottom first.
-    if (value !== true && !sleeping && tirednessLevel >= 60) {
-      sleeping = true
-      playSound("sleep")
-      flushPet()
-    }
+    // Brought home already sleepy? It settles in for a moment, then dozes
+    // off — no need to hit rock bottom first.
+    if (value !== true && !sleeping && tirednessLevel >= 60)
+      resleepTimer.restart()
   }
 
   // A big fall hurts its feelings too: the inverse of a petting.
