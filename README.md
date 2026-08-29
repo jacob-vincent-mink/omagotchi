@@ -61,19 +61,21 @@ Hyprland IPC through Quickshell; the overlay is fully click-through except
 the pet itself, which you can pet mid-stroll. Roaming keeps boredom down, but
 it is tiring — an exhausted pet naps on the spot, wherever it is.
 
-On a multi-monitor setup the pet goes out on the largest screen. If that is
-not the one you actually work on, set `roamScreen` in
-`~/.local/state/omarchy/omagotchi-settings.json` to the output you want,
+On a multi-monitor setup the pet goes out on the screen you click
+**Go play** on. To pin it to one output instead, pick a screen in the
+panel's settings (the cogwheel next to the mood line), or set `roamScreen`
+in `~/.local/state/omarchy/omagotchi-settings.json` to the output you want,
 spelled the way `hyprctl monitors` prints it:
 
 ```json
 { "roamScreen": "DP-1" }
 ```
 
-Leave it empty for the default, and if the named screen is disconnected the
-pet falls back to the largest one rather than having nowhere to go.
-Settings are read when the plugin loads, so restart the shell
-(`omarchy restart shell`) after editing the file.
+A pinned screen always wins; leave it empty to follow your clicks. If the
+pinned screen is disconnected the pet falls back to the largest one rather
+than having nowhere to go. The file is read when the plugin loads, so
+restart the shell (`omarchy restart shell`) after editing it by hand —
+the in-panel setting applies immediately.
 
 You can also **pick it up**: press and drag to carry it by the scruff, then drop it anywhere. Drop it from too high and it lands
 stunned (it decreases its affection gauge so you'll need to cuddle it to show you're sorry).
