@@ -72,6 +72,8 @@ spelled the way `hyprctl monitors` prints it:
 
 Leave it empty for the default, and if the named screen is disconnected the
 pet falls back to the largest one rather than having nowhere to go.
+Settings are read when the plugin loads, so restart the shell
+(`omarchy restart shell`) after editing the file.
 
 You can also **pick it up**: press and drag to carry it by the scruff, then drop it anywhere. Drop it from too high and it lands
 stunned (it decreases its affection gauge so you'll need to cuddle it to show you're sorry).
