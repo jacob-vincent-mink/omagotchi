@@ -117,6 +117,9 @@ Item {
   property real handoffX: -1
   property real handoffY: -1
   property string handoffScreen: ""
+  // The screen Go play / Come home was last clicked on. Runtime-only: after
+  // a shell restart the playground falls back to the usual screen choice.
+  property string requestedScreenName: ""
 
   // Set by the panel to call the pet home through the tractor beam; the roam
   // window beams it up to the handoff spot, then clears this and fires

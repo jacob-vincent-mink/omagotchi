@@ -58,11 +58,7 @@ Panel {
       hint: petService.sleeping ? "recovering — Zzz…" : "naps when exhausted",
       action: "", actionLabel: "", actionTip: "" },
     { label: "Fun", value: petService.boredom, hint: "roaming cures boredom",
-      action: "roam",
-      actionLabel: petService.settings.roamEnabled === true ? "Come home" : "Go play",
-      actionTip: petService.canRoam
-        ? "Let the pet roam and climb your windows"
-        : "Too young to go out alone" },
+      action: "", actionLabel: "", actionTip: "" },
     { label: "Affection", value: petService.loneliness, hint: "click the pet!",
       action: "", actionLabel: "", actionTip: "" }
   ] : []
@@ -93,7 +89,11 @@ Panel {
     petService.handoffX = center.x
     petService.handoffY = cardBottom
     petService.handoffScreen = panelScreen ? panelScreen.name : ""
+    // Declare the return BEFORE pulling the playground onto this screen:
+    // the surface hop replays resetPosition, which must already know a
+    // return is pending or it mistakes the handoff for an exit beam-in.
     petService.returnRequested = true
+    petService.requestedScreenName = petService.handoffScreen
     petService.playBeamSound(true)
   }
 
@@ -136,6 +136,8 @@ Panel {
     petService.handoffX = feetX
     petService.handoffY = cardBottom
     petService.handoffScreen = panelScreen ? panelScreen.name : ""
+    // The pet goes out on the screen it was sent out from.
+    petService.requestedScreenName = petService.handoffScreen
     petService.setRoamEnabled(true)
   }
 
@@ -590,19 +592,45 @@ Panel {
           }
         }
 
-        Text {
+        // The mood line, with the settings cogwheel at its right edge: the
+        // text is centered on the full card width so the cog never shifts it.
+        Item {
           width: parent.width
-          horizontalAlignment: Text.AlignHCenter
-          text: root.ready ? root.petService.moodLabel : "Waking up…"
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.body
-          wrapMode: Text.Wrap
-          renderType: Text.NativeRendering
+          height: Math.max(moodText.implicitHeight, settingsButton.height)
+
+          Text {
+            id: moodText
+            width: parent.width
+            anchors.verticalCenter: parent.verticalCenter
+            horizontalAlignment: Text.AlignHCenter
+            text: settingsControl.open ? "Settings"
+              : root.ready ? root.petService.moodLabel : "Waking up…"
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            wrapMode: Text.Wrap
+            renderType: Text.NativeRendering
+          }
+
+          PanelActionButton {
+            id: settingsButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            // nf-md-cog, by code point so it survives tools that strip
+            // private-use characters.
+            iconText: String.fromCodePoint(0xF0493)
+            tooltipText: settingsControl.open ? "Back to the pet" : "Settings"
+            fontFamily: root.fontFamily
+            foreground: root.foreground
+            bordered: true
+            enabled: root.ready
+            onClicked: settingsControl.open = !settingsControl.open
+          }
         }
 
         Text {
           width: parent.width
+          visible: !settingsControl.open
           horizontalAlignment: Text.AlignHCenter
           text: root.ready
             ? root.petService.stageLabel + " · "
@@ -620,7 +648,7 @@ Panel {
         Button {
           anchors.horizontalCenter: parent.horizontalCenter
           visible: root.ready && root.petService.stage === "adult"
-            && !root.petService.farewellPending
+            && !root.petService.farewellPending && !settingsControl.open
           text: "Let it go"
           tooltipText: "Say goodbye — a new egg will appear (Gen "
             + (root.ready ? root.petService.generation + 1 : 2) + ")"
@@ -633,6 +661,7 @@ Panel {
         Column {
           width: parent.width
           spacing: Style.space(8)
+          visible: !settingsControl.open
 
           Repeater {
             model: root.needs
@@ -713,36 +742,34 @@ Panel {
           }
         }
 
-        // --- sound ---------------------------------------------------------
-        // A speaker button; click it to unfold the effects volume slider.
+        // --- settings -------------------------------------------------------
+        // Unfolded by the cogwheel in the card's top-right corner: effects
+        // volume, and where the pet goes out to play.
         Column {
-          id: soundControl
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(6)
+          id: settingsControl
+          width: parent.width
+          spacing: Style.space(8)
+          visible: open
           property bool open: false
           readonly property real volume: root.ready ? root.petService.soundVolume : 0.5
 
-          PanelActionButton {
-            id: soundButton
-            anchors.horizontalCenter: parent.horizontalCenter
-            // Nerd Font speaker glyphs (nf-md-volume_off/low/medium/high), by
-            // code point so the icons survive any editor or tool that strips
-            // private-use characters.
-            iconText: String.fromCodePoint(soundControl.volume <= 0 ? 0xF0581
-              : soundControl.volume < 0.34 ? 0xF057F
-              : soundControl.volume < 0.67 ? 0xF0580 : 0xF057E)
-            tooltipText: soundControl.open ? "Hide the volume slider" : "Sound effects volume"
-            fontFamily: root.fontFamily
-            foreground: root.foreground
-            bordered: true
-            enabled: root.ready
-            onClicked: soundControl.open = !soundControl.open
-          }
-
           Row {
-            visible: soundControl.open
             spacing: Style.space(8)
             anchors.horizontalCenter: parent.horizontalCenter
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              // Nerd Font speaker glyphs (nf-md-volume_off/low/medium/high),
+              // by code point so the icons survive any editor or tool that
+              // strips private-use characters.
+              text: String.fromCodePoint(settingsControl.volume <= 0 ? 0xF0581
+                : settingsControl.volume < 0.34 ? 0xF057F
+                : settingsControl.volume < 0.67 ? 0xF0580 : 0xF057E)
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              renderType: Text.NativeRendering
+            }
 
             PanelSlider {
               id: volumeSlider
@@ -752,27 +779,79 @@ Panel {
               minimum: 0
               maximum: 1
               step: 0.05
-              value: soundControl.volume
+              value: settingsControl.volume
               // Persist on release, and let it be heard right away.
               onReleased: function(v) {
                 root.petService.updateSettings({ soundVolume: v })
-                Qt.callLater(function() { root.petService.playSound("pet") })
+                Qt.callLater(function() { root.petService.playSound("hum") })
               }
               onRightClicked: root.petService.updateSettings({
-                soundVolume: soundControl.volume > 0 ? 0 : 0.5 })
+                soundVolume: settingsControl.volume > 0 ? 0 : 0.5 })
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
               width: Style.space(36)
               horizontalAlignment: Text.AlignRight
               text: Math.round((volumeSlider.dragging ? volumeSlider.liveValue
-                : soundControl.volume) * 100) + "%"
+                : settingsControl.volume) * 100) + "%"
               color: Qt.alpha(root.foreground, 0.7)
               font.family: root.fontFamily
               font.pixelSize: Style.font.bodySmall
               renderType: Text.NativeRendering
             }
           }
+
+          Row {
+            spacing: Style.space(8)
+            anchors.horizontalCenter: parent.horizontalCenter
+            // On a single screen every choice lands in the same place —
+            // don't show a setting that cannot do anything.
+            visible: Quickshell.screens.length > 1
+
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Roam screen"
+              color: Qt.alpha(root.foreground, 0.7)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              renderType: Text.NativeRendering
+            }
+
+            Button {
+              anchors.verticalCenter: parent.verticalCenter
+              text: root.ready && root.petService.settings.roamScreen
+                ? root.petService.settings.roamScreen : "Where I click"
+              tooltipText: "Where the pet goes out to play: the screen Go play"
+                + " is clicked on, or one pinned output"
+              fontFamily: root.fontFamily
+              enabled: root.ready
+              onClicked: {
+                // Cycle: follow the click, then each connected output.
+                var names = [""]
+                var screens = Quickshell.screens
+                for (var i = 0; i < screens.length; i++) names.push(screens[i].name)
+                var current = root.petService.settings.roamScreen || ""
+                var next = names[(names.indexOf(current) + 1) % names.length]
+                root.petService.updateSettings({ roamScreen: next })
+              }
+            }
+          }
+        }
+
+        // --- go play / come home --------------------------------------------
+        Button {
+          width: parent.width
+          visible: root.ready && !settingsControl.open
+          text: root.ready && root.petService.settings.roamEnabled === true
+            ? "Come home" : "Go play"
+          tooltipText: root.ready && root.petService.canRoam
+            ? "Let the pet roam and climb your windows"
+            : "Too young to go out alone"
+          fontFamily: root.fontFamily
+          enabled: root.ready && root.petService.canRoam
+            && !root.petService.farewellPending
+          opacity: enabled ? 1 : 0.4
+          onClicked: root.runAction("roam")
         }
 
       }
