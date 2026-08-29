@@ -71,6 +71,28 @@ Panel {
   property bool exiting: false
   property bool entering: false
 
+  // "90h 56m" reads badly past a few days: break the age into y/mo/d/h/m
+  // from the largest non-zero unit. Pet time: a month is 30 active days and
+  // a year is 12 of those, so units always roll over cleanly.
+  function ageLabel(minutes) {
+    var left = Math.floor(minutes)
+    var units = [
+      { size: 518400, suffix: "y" },
+      { size: 43200, suffix: "mo" },
+      { size: 1440, suffix: "d" },
+      { size: 60, suffix: "h" },
+      { size: 1, suffix: "m" }
+    ]
+    var parts = []
+    for (var i = 0; i < units.length; i++) {
+      var n = Math.floor(left / units[i].size)
+      left -= n * units[i].size
+      if (parts.length === 0 && n === 0 && i < units.length - 1) continue
+      parts.push(n + units[i].suffix)
+    }
+    return parts.join(" ")
+  }
+
   function runAction(kind) {
     if (!ready) return
     if (kind === "feed") petService.feedNow()
@@ -634,8 +656,7 @@ Panel {
           horizontalAlignment: Text.AlignHCenter
           text: root.ready
             ? root.petService.stageLabel + " · "
-              + Math.floor(root.petService.ageMinutes / 60) + "h"
-              + Math.floor(root.petService.ageMinutes % 60) + "m old"
+              + root.ageLabel(root.petService.ageMinutes) + " old"
               + (root.petService.generation > 1
                 ? " · Gen " + root.petService.generation : "")
             : ""
@@ -643,6 +664,20 @@ Panel {
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           renderType: Text.NativeRendering
+
+          // The one hint the game gives about evolution — deliberately
+          // number-free: the exact thresholds stay a playground mystery.
+          MouseArea {
+            id: ageHover
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+          }
+          PanelToolTip {
+            visible: ageHover.containsMouse && root.ready
+            text: "It grows with time. Who it becomes reflects the care you gave it."
+            fontFamily: root.fontFamily
+          }
         }
 
         Button {
