@@ -28,6 +28,10 @@ Item {
   readonly property var defaultSettings: ({
     roamEnabled: false,
     roamScale: 3,
+    // Which output the pet roams on, named as Hyprland names it (whatever
+    // `hyprctl monitors` prints, e.g. "DP-1"). Empty keeps the default: the
+    // largest screen.
+    roamScreen: "",
     soundVolume: 0.5
   })
   // Effects volume, 0 (mute) to 1.
