@@ -681,12 +681,31 @@ Item {
 
   // --- roaming ---------------------------------------------------------------
 
+  // Outputs coming and going (monitors powered off, lock, unplug) destroy the
+  // roam layer surface while QML still believes the window is visible — the
+  // pet keeps "roaming" with nowhere to be drawn, and the return sequence's
+  // visible-gated timers never fire. Dropping visibility for a beat after the
+  // screen list settles forces Quickshell to map a fresh surface.
+  property bool screensSettled: true
+  Connections {
+    target: Quickshell
+    function onScreensChanged() {
+      root.screensSettled = false
+      screensSettleTimer.restart()
+    }
+  }
+  Timer {
+    id: screensSettleTimer
+    interval: 1000
+    onTriggered: root.screensSettled = true
+  }
+
   // Deliberately a static window with a visibility binding, not a Loader:
   // dynamically created windows leak a zombie layer surface across the shell's
   // plugin hot-reload, which then wedges screencopy (grim) on that output.
   RoamWindow {
     petService: root
-    visible: root.initialized && root.roaming
+    visible: root.initialized && root.roaming && root.screensSettled
   }
 
   // --- persistence -----------------------------------------------------------
