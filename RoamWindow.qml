@@ -600,7 +600,10 @@ PanelWindow {
           root.support = null
           root.gentleFall = false
           root.beamActive = false
-          if (root.petService) root.petService.wakeUp()
+          if (root.petService) {
+            root.petService.wakeUp()
+            root.petService.playSound("grab")
+          }
         }
         root.petX = Math.max(0, Math.min(root.width - root.spriteSize, p.x - grabDx))
         root.petY = Math.max(root.headroom,

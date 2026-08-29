@@ -270,7 +270,11 @@ Item {
 
     if (sleeping) {
       tirednessLevel = Math.max(0, tirednessLevel - 2.2)
-      if (tirednessLevel <= 5) sleeping = false
+      if (tirednessLevel <= 5) {
+        sleeping = false
+        // A little hum tells the user it woke up on its own.
+        playSound("hum")
+      }
     } else {
       tirednessLevel = Math.min(100,
         tirednessLevel + (roaming ? 0.55 : 0.28) * rates.tired)
@@ -330,6 +334,7 @@ Item {
     wash: "wash.wav",
     pet: ["pet.wav", "pet2.wav"],
     hum: "humming.wav",
+    grab: "grab.wav",
     sleep: "sleep.mp3",
     stun: "stun.mp3",
     land: "fall.wav",
@@ -465,7 +470,9 @@ Item {
     lastPetMs = Date.now()
     nowMs = lastPetMs
     lonelinessLevel = Math.max(0, lonelinessLevel - 10)
-    boredomLevel = Math.max(0, boredomLevel - 10)
+    // Cuddles only entertain a pet too little to go out; once it can
+    // roam, boredom is cured outside.
+    if (!canRoam) boredomLevel = Math.max(0, boredomLevel - 10)
     playSound("pet")
     flushPet()
   }
