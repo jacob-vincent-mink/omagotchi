@@ -25,11 +25,11 @@ PanelWindow {
     return typeof name === "string" ? name : ""
   }
 
-  // The playground: the screen named by roamScreen, else the largest one.
-  // Picking purely by area sends the pet to whichever monitor has the most
-  // pixels, which on a mixed desk (say a 4K above a couple of 1440p panels) is
-  // often not the one being worked on — the pet goes out to play on a screen
-  // you never glance at, and it looks like "Go play" did nothing at all.
+  // The playground, by priority: the screen pinned by the roamScreen setting,
+  // else the screen Go play / Come home was clicked on, else the largest one.
+  // Largest-only sent the pet to whichever monitor has the most pixels, which
+  // on a mixed desk is often not the one being worked on — it looked like
+  // "Go play" did nothing at all.
   screen: {
     var screens = Quickshell.screens
     var i
@@ -37,6 +37,11 @@ PanelWindow {
       for (i = 0; i < screens.length; i++)
         if (screens[i].name === preferredScreenName) return screens[i]
       // Named screen unplugged: fall through rather than leave the pet homeless.
+    }
+    var clicked = petService ? petService.requestedScreenName : ""
+    if (clicked !== "") {
+      for (i = 0; i < screens.length; i++)
+        if (screens[i].name === clicked) return screens[i]
     }
     var best = null
     for (i = 0; i < screens.length; i++) {
@@ -228,7 +233,35 @@ PanelWindow {
   Connections {
     target: root.petService
     function onReturnRequestedChanged() {
-      if (root.petService.returnRequested && root.visible) root.startReturn()
+      if (!root.petService.returnRequested || !root.visible) return
+      if (root.screen && root.petService.handoffScreen === root.screen.name) {
+        root.startReturn()
+        return
+      }
+      // A cross-screen Come home first moves the playground onto the panel's
+      // screen, and that surface hop is asynchronous — wait for it to land
+      // before anchoring the beam instead of popping home on the mismatch.
+      returnWait.tries = 0
+      returnWait.restart()
+    }
+  }
+
+  Timer {
+    id: returnWait
+    interval: 100
+    repeat: true
+    property int tries: 0
+    onTriggered: {
+      var svc = root.petService
+      if (!svc || !svc.returnRequested) { stop(); return }
+      if (root.screen && svc.handoffScreen === root.screen.name) {
+        stop()
+        root.startReturn()
+      } else if (++tries > 15) {
+        // The playground never made it over: pop home like before.
+        stop()
+        root.finishReturn()
+      }
     }
   }
 
@@ -453,6 +486,17 @@ PanelWindow {
     pendingClimb = null
     var svc = petService
     var w = width > 0 ? width : (screen ? screen.width : 0)
+    if (svc && svc.returnRequested) {
+      // Mid Come-home hop between screens: the freshly landed surface must
+      // not mistake the pending handoff for an exit (beam-in) — stand by on
+      // the floor and leave the handoff for the return sequence to consume.
+      beamActive = false
+      petX = Math.max(0, w / 2 - spriteSize / 2)
+      petY = floorY
+      action = "idle"
+      refreshDebounce.restart()
+      return
+    }
     if (svc && svc.handoffX >= 0 && screen && svc.handoffScreen === screen.name) {
       // The pet just dropped out of its panel: continue that fall from right
       // under the card instead of teleporting to the floor.
