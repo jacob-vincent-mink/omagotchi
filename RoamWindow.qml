@@ -56,7 +56,11 @@ PanelWindow {
   exclusionMode: ExclusionMode.Ignore
   WlrLayershell.layer: WlrLayer.Top
   WlrLayershell.namespace: "omagotchi"
-  mask: Region { item: sprite }
+  // Click-through everywhere except the pet — except mid-press, where the
+  // whole window catches input: on an empty workspace Hyprland drops the
+  // implicit grab on layer surfaces, so a cursor outrunning the sprite would
+  // leave the input region and freeze the drag midair.
+  mask: Region { item: grabArea.pressed ? root.contentItem : sprite }
 
   readonly property int petScale: {
     var value = petService && petService.settings
@@ -612,6 +616,14 @@ PanelWindow {
         } else {
           if (root.petService) root.petService.petThePet()
           heart.pop()
+        }
+      }
+      // A grab broken by the compositor must not leave the pet floating
+      // midair in the held pose.
+      onCanceled: {
+        if (dragging) {
+          dragging = false
+          root.startFall()
         }
       }
     }
