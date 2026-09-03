@@ -284,6 +284,10 @@ Item {
       if (tirednessLevel >= 90) {
         sleeping = true
         playSound("sleep")
+      } else if (tirednessLevel >= 60 && !roaming && !resleepTimer.running) {
+        // Sleepy at home with nothing better to do: doze off shortly.
+        // The timer re-checks (eating, care animation) before committing.
+        resleepTimer.restart()
       }
     }
 
