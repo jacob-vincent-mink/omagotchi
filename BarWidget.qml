@@ -26,8 +26,8 @@ Item {
     Item {
       id: content
       anchors.centerIn: parent
-      implicitWidth: 32
-      implicitHeight: 32
+      width: 32
+      height: 32
 
       PetSprite {
         anchors.fill: parent
