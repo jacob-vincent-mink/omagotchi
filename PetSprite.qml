@@ -45,12 +45,48 @@ Item {
     mipmap: false
     fillMode: Image.PreserveAspectFit
     mirror: root.mirrored
-    visible: true
+    visible: false
 
     // Deferred: writing resolvedAnim during the source evaluation that
     // triggered the status change would be a binding loop.
     onStatusChanged: if (status === Image.Error) Qt.callLater(root.applyFallback)
+    onSourceChanged: {
+      sprite.loadImage(source)
+      sprite.requestPaint()
+    }
   }
+
+  Canvas {
+    id: sprite
+    anchors.fill: parent
+    renderTarget: Canvas.Image
+    renderStrategy: Canvas.Immediate
+
+    onImageLoaded: requestPaint()
+    onWidthChanged: requestPaint()
+    onHeightChanged: requestPaint()
+    Component.onCompleted: loadImage(image.source)
+
+    onPaint: {
+      var context = getContext("2d")
+      context.clearRect(0, 0, width, height)
+      if (!isImageLoaded(image.source)) return
+      context.save()
+      if (root.mirrored) {
+        context.translate(width, 0)
+        context.scale(-1, 1)
+      }
+      context.drawImage(image.source, 0, 0, width, height)
+      context.restore()
+      context.globalCompositeOperation = "source-in"
+      context.fillStyle = root.tint
+      context.fillRect(0, 0, width, height)
+      context.globalCompositeOperation = "source-over"
+    }
+  }
+
+  onTintChanged: sprite.requestPaint()
+  onMirroredChanged: sprite.requestPaint()
 
   Timer {
     interval: root.frameMs
