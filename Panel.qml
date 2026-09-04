@@ -850,7 +850,8 @@ Presentation.Panel {
           width: parent.width
           visible: root.ready && !settingsControl.open
           text: root.ready && root.petService.settings.roamEnabled === true
-            ? "Come home" : "Go play"
+            ? "Come home" : root.ready && !root.petService.canRoam
+              ? "Too young to go play" : "Go play"
           tooltipText: root.ready && root.petService.canRoam
             ? "Let the pet roam and climb your windows"
             : "Too young to go out alone"
