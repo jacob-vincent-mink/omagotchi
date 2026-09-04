@@ -1,21 +1,75 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "slcode777.omagotchi",
   "name": "Omagotchi",
-  "version": "0.1.0",
+  "version": "0.2.0-secure-preview",
   "author": "SLcode777",
   "license": "MIT",
   "description": "A 1-bit desktop pet in your bar, in the spirit of the 1997 originals: feed it, scrub it clean, cuddle it, and let it out to roam your screen and climb your windows. It hatches, grows, and evolves with the care you give.",
-  "kinds": ["service", "bar-widget"],
-  "entryPoints": {
-    "service": "Service.qml",
-    "barWidget": "BarWidget.qml"
+  "runtime": {
+    "apiVersion": 1,
+    "qml": "Panel.qml",
+    "surfaceQml": {
+      "panel": "Panel.qml",
+      "barWidget": "BarWidget.qml",
+      "roam": "RoamWindow.qml"
+    }
   },
-  "barWidget": {
-    "displayName": "Omagotchi",
-    "description": "Your Omarchy companion, living in the bar. Click to open its home.",
-    "category": "Fun",
-    "allowMultiple": false,
-    "defaultSection": "right"
+  "surfaces": {
+    "panel": {
+      "role": "panel",
+      "maximumWidth": 640,
+      "maximumHeight": 1000,
+      "maximumFramesPerSecond": 30,
+      "keyboardFocus": "after-gesture",
+      "lockScreenVisible": false,
+      "inputRegions": "dynamic-bounded"
+    },
+    "barWidget": {
+      "role": "bar-embedded",
+      "maximumWidth": 72,
+      "maximumHeight": 64,
+      "maximumFramesPerSecond": 30,
+      "inputRegions": "dynamic-bounded",
+      "defaultSection": "right"
+    },
+    "roam": {
+      "role": "desktop-overlay",
+      "initiallyVisible": true,
+      "maximumWidth": 2048,
+      "maximumHeight": 2048,
+      "maximumFramesPerSecond": 30,
+      "keyboardFocus": false,
+      "lockScreenVisible": false,
+      "inputRegions": "dynamic-bounded"
+    }
+  },
+  "permissions": {
+    "required": [],
+    "optional": [
+      {
+        "capability": "storage.private",
+        "quotaBytes": 1048576,
+        "reason": "Keep the pet's growth, needs, and settings across sessions"
+      },
+      {
+        "capability": "notifications.send",
+        "categories": ["pet-care"],
+        "reason": "Announce hatching and evolution"
+      },
+      {
+        "capability": "audio.play-cue",
+        "cues": ["balloon", "eat", "evolve", "fall", "farewell_ace", "farewell_gremlin", "farewell_ok", "grab", "hatch", "humming", "pet", "pet2", "sleep", "stun", "subbass", "tractorbeam", "wash"],
+        "reason": "Play the packaged care and movement sounds"
+      },
+      {
+        "capability": "system.observe",
+        "definitionGeneration": 1,
+        "definitionDigest": "59af09ff1dd91191a3dcfb7917fd6bebc7aaac91a892c69cbd329bd45e4df520",
+        "operations": ["observe"],
+        "datasets": ["compositor.window-rectangles", "packages.summary"],
+        "reason": "Let the pet use sanitized window rectangles and bounded package counts"
+      }
+    ]
   }
 }

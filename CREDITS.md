@@ -25,6 +25,7 @@ so a sound can be swapped without touching code.
 | `farewell_ok.mp3` | the ok adult says goodbye | "bye-bye" by Alivvie — https://freesound.org/s/323361/ — CC0 |
 | `farewell_gremlin.mp3` | the gremlin says goodbye | "UFO Voice Goodbye.mp3" by richmstudios — https://freesound.org/s/317015/ — CC BY-NC 3.0 |
 | `subbass.wav` | tractor beam powering up | "sub bass 1 seconddddd.wav" by uzerx — https://freesound.org/s/59537/ — CC0 |
+| `grab.wav` | picked up by the scruff | "74-PerritoLadraSorprendido.wav" by Caap — https://freesound.org/s/427133/ — CC0 — pitched up 3 semitones |
 
 ## Sprites
 
