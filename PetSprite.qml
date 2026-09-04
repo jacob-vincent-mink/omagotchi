@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 
 // One animated 1-bit sprite: the two frames (a/b) of `anim` for `form`,
 // tinted live with the theme's colors. If an animation's frames are not in
@@ -46,18 +45,11 @@ Item {
     mipmap: false
     fillMode: Image.PreserveAspectFit
     mirror: root.mirrored
-    visible: false
+    visible: true
 
     // Deferred: writing resolvedAnim during the source evaluation that
     // triggered the status change would be a binding loop.
     onStatusChanged: if (status === Image.Error) Qt.callLater(root.applyFallback)
-  }
-
-  MultiEffect {
-    anchors.fill: image
-    source: image
-    colorization: 1
-    colorizationColor: root.tint
   }
 
   Timer {

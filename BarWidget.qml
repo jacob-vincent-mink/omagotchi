@@ -1,4 +1,5 @@
 import QtQuick
+import Omarchy.PluginPresentation 1.0
 
 // Bar button: the pet's face, breathing slowly. Left click opens its home,
 // middle click is a quick pet on the head.
@@ -19,9 +20,9 @@ Item {
     id: button
     anchors.fill: parent
     radius: 8
-    color: pointer.containsMouse ? "#25344a" : "transparent"
-    border.width: pointer.containsMouse ? 1 : 0
-    border.color: "#5fa8ff"
+    color: Color.alpha(Color.background, pointer.containsMouse ? 0.72 : 0.58)
+    border.width: 1
+    border.color: Color.alpha(Color.foreground, pointer.containsMouse ? 0.42 : 0.2)
 
     Item {
       id: content
