@@ -11,24 +11,19 @@ Item {
   readonly property bool serviceReady: !!petService && petService.initialized === true
   readonly property string tooltipText: serviceReady ? petService.moodLabel : "Omagotchi"
 
-  implicitWidth: 44
-  implicitHeight: 44
-  width: implicitWidth
-  height: implicitHeight
+  implicitWidth: Style.bar.statusSlot
+  implicitHeight: Style.bar.size
 
   Rectangle {
     id: button
     anchors.fill: parent
-    radius: 8
-    color: Color.alpha(Color.background, pointer.containsMouse ? 0.72 : 0.58)
-    border.width: 1
-    border.color: Color.alpha(Color.foreground, pointer.containsMouse ? 0.42 : 0.2)
+    color: "transparent"
 
     Item {
       id: content
       anchors.centerIn: parent
-      width: 32
-      height: 32
+      width: Style.font.icon
+      height: Style.font.icon
 
       PetSprite {
         anchors.fill: parent
@@ -39,7 +34,7 @@ Item {
           && root.petService.mood !== "happy" && root.petService.mood !== "egg"
           && root.petService.mood !== "sleeping"
           ? 350 : 900
-        tint: root.serviceReady ? "#f4f7fb" : "#7c8796"
+        tint: root.serviceReady ? Color.bar.text : Color.alpha(Color.bar.text, 0.45)
       }
     }
 
