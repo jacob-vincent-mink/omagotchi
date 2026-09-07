@@ -3,42 +3,28 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
-import Quickshell
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0 as Presentation
 
 // The pet's home: a card with the pet front and center, its needs as bars,
 // and the care actions. Every action maps to real system maintenance.
-Panel {
+Presentation.Panel {
   id: root
   moduleName: "slcode777.omagotchi"
+  surfaceTarget: "panel"
 
-  // One panel instance exists per bar; only the largest screen's instance
-  // claims the IPC target, so `qs ipc call slcode777.omagotchi toggle` acts
-  // on a predictable panel instead of whichever instance registered first.
-  readonly property var panelScreen: anchorItem && anchorItem.QsWindow.window
-    ? anchorItem.QsWindow.window.screen : null
-  readonly property var mainScreen: {
-    var best = null
-    var screens = Quickshell.screens
-    for (var i = 0; i < screens.length; i++) {
-      if (!best || screens[i].width * screens[i].height > best.width * best.height)
-        best = screens[i]
-    }
-    return best
-  }
-  ipcTarget: panelScreen && panelScreen === mainScreen ? moduleName : ""
-
-  property var anchorItem: null
-  property var hostWidget: null
-  property var petService: null
-  readonly property var barIdentity: hostWidget || root
+  width: Presentation.Style.space(410)
+  height: Math.min(960, contentColumn.implicitHeight + Presentation.Style.space(44))
+  opened: true
+  property var petService: SharedService
+  property var inputRegions: [{ x: 0, y: 0, width: width, height: height }]
+  readonly property bool acceptsKeyboardFocus: true
+  readonly property int maximumFramesPerSecond: 30
 
   readonly property bool ready: !!petService && petService.initialized === true
   // Out roaming = not home: the plate stays empty while it plays outside.
   readonly property bool petIsOut: ready && petService.roaming === true
-  readonly property color foreground: Color.popups.text
-  readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
+  readonly property color foreground: Presentation.Color.foreground
+  readonly property string fontFamily: Presentation.Style.font.family
 
   readonly property var needs: ready ? [
     { label: "Hunger", value: petService.hunger,
@@ -108,15 +94,10 @@ Panel {
     // centered under the room.
     var center = petRoom.mapToItem(null, petRoom.width / 2, 0)
     var cardBottom = keyCatcher.mapToItem(null, 0, keyCatcher.height).y
-    petService.handoffX = center.x
-    petService.handoffY = cardBottom
-    petService.handoffScreen = panelScreen ? panelScreen.name : ""
-    // Declare the return BEFORE pulling the playground onto this screen:
-    // the surface hop replays resetPosition, which must already know a
-    // return is pending or it mistakes the handoff for an exit beam-in.
+    petService.handoffXRatio = Math.max(0, Math.min(1, center.x / Math.max(1, root.width)))
+    petService.handoffYRatio = Math.max(0, Math.min(1, cardBottom / Math.max(1, root.height)))
+    // Declare the return before the shared roam surface handles the handoff.
     petService.returnRequested = true
-    petService.requestedScreenName = petService.handoffScreen
-    petService.playBeamSound(true)
   }
 
   Connections {
@@ -136,7 +117,6 @@ Panel {
     if (exiting || !ready) return
     petService.wakeUp()
     exiting = true
-    petService.playBeamSound()
     var start = petRoom.mapToItem(exitOverlay,
       (petRoom.width - exitPet.width) / 2, (petRoom.height - exitPet.height) / 2)
     exitPet.x = start.x
@@ -149,66 +129,58 @@ Panel {
     if (!exiting) return
     exiting = false
     if (!ready) return
-    // The panel surface is a full-screen layer shell, so scene coordinates
-    // are screen coordinates. The sprite disappeared behind the card at the
-    // room's edge, so the fall resumes under the card's bottom, not where
-    // the sprite actually stopped.
-    var feetX = exitPet.mapToItem(null, exitPet.width / 2, 0).x
-    var cardBottom = keyCatcher.mapToItem(null, 0, keyCatcher.height).y
-    petService.handoffX = feetX
-    petService.handoffY = cardBottom
-    petService.handoffScreen = panelScreen ? panelScreen.name : ""
-    // The pet goes out on the screen it was sent out from.
-    petService.requestedScreenName = petService.handoffScreen
+    petService.handoffXRatio = Math.max(0, Math.min(1,
+      (exitOverlay.x + exitPet.x + exitPet.width / 2) / Math.max(1, root.width)))
+    petService.handoffYRatio = Math.max(0, Math.min(1,
+      (exitOverlay.y + exitOverlay.height) / Math.max(1, root.height)))
     petService.setRoamEnabled(true)
   }
 
-  KeyboardPanel {
+  Presentation.KeyboardPanel {
     id: panel
-    anchorItem: root.anchorItem
-    owner: root.barIdentity
+    anchorItem: root
+    owner: root
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    padding: Style.space(14)
-    contentWidth: panel.fittedContentWidth(Style.space(410))
+    padding: Presentation.Style.space(14)
+    contentWidth: panel.fittedContentWidth(Presentation.Style.space(410))
     // The card sizes itself from the actual content, plus breathing room at
     // the bottom. fittedContentHeight adds the card's own padding and border
     // inset — contentHeight includes them, so feeding it a raw content height
     // silently shaves that inset off the content area instead.
-    contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight + Style.space(16))
+    contentHeight: panel.fittedContentHeight(contentColumn.implicitHeight + Presentation.Style.space(16))
 
-    PanelKeyCatcher {
+    Presentation.PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      onCloseRequested: root.close()
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+      onCloseRequested: runtime.requestSurfaceIntent("panel", "dismiss")
 
       Column {
         id: contentColumn
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        spacing: Style.space(12)
+        spacing: Presentation.Style.space(12)
 
         // --- the pet -------------------------------------------------------
 
         Rectangle {
           id: petRoom
           width: parent.width
-          height: Style.space(150)
-          radius: Style.cornerRadius > 0 ? Style.space(10) : 0
-          color: Qt.alpha(Color.accent, 0.08)
+          height: Presentation.Style.space(150)
+          radius: Presentation.Style.cornerRadius > 0 ? Presentation.Style.space(10) : 0
+          color: Presentation.Color.alpha(Presentation.Color.accent, 0.08)
           border.width: 1
-          border.color: Qt.alpha(Color.accent, 0.25)
+          border.color: Presentation.Color.alpha(Presentation.Color.accent, 0.25)
 
           Text {
             anchors.centerIn: parent
             visible: root.petIsOut
             text: "Out playing…"
-            color: Qt.alpha(root.foreground, 0.5)
+            color: Presentation.Color.alpha(root.foreground, 0.5)
             font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
+            font.pixelSize: Presentation.Style.font.bodySmall
             renderType: Text.NativeRendering
           }
 
@@ -263,12 +235,12 @@ Panel {
               required property var modelData
               // Clamped so a large sprite can never spill past the room walls.
               x: Math.min(petRoom.width * modelData.x,
-                          petRoom.width - decorItem.width - Style.space(6))
+                          petRoom.width - decorItem.width - Presentation.Style.space(6))
               y: Math.min(petRoom.height * modelData.y,
-                          petRoom.height - decorItem.height - Style.space(6)) - hop
-              width: Style.space(decorImage.status === Image.Ready
+                          petRoom.height - decorItem.height - Presentation.Style.space(6)) - hop
+              width: Presentation.Style.space(decorImage.status === Image.Ready
                 ? decorImage.implicitWidth * modelData.px : 0)
-              height: Style.space(decorImage.status === Image.Ready
+              height: Presentation.Style.space(decorImage.status === Image.Ready
                 ? decorImage.implicitHeight * modelData.px : 0)
               visible: decorImage.status === Image.Ready
 
@@ -293,11 +265,11 @@ Panel {
               SequentialAnimation {
                 id: bounceAnim
                 NumberAnimation { target: decorItem; property: "hop"
-                  to: Style.space(22); duration: 170; easing.type: Easing.OutQuad }
+                  to: Presentation.Style.space(22); duration: 170; easing.type: Easing.OutQuad }
                 NumberAnimation { target: decorItem; property: "hop"
                   to: 0; duration: 170; easing.type: Easing.InQuad }
                 NumberAnimation { target: decorItem; property: "hop"
-                  to: Style.space(8); duration: 110; easing.type: Easing.OutQuad }
+                  to: Presentation.Style.space(8); duration: 110; easing.type: Easing.OutQuad }
                 NumberAnimation { target: decorItem; property: "hop"
                   to: 0; duration: 110; easing.type: Easing.InQuad }
               }
@@ -308,7 +280,6 @@ Panel {
                 onClicked: {
                   if (bounceAnim.running) return
                   bounceAnim.start()
-                  root.petService.playSound("ball")
                 }
               }
 
@@ -352,8 +323,8 @@ Panel {
                   fillGradient: LinearGradient {
                     x1: lightCone.mx; y1: lightCone.my
                     x2: lightCone.cx; y2: lightCone.cy
-                    GradientStop { position: 0; color: Qt.alpha(Color.accent, 0.45 * decorItem.glow) }
-                    GradientStop { position: 1; color: Qt.alpha(Color.accent, 0) }
+                    GradientStop { position: 0; color: Presentation.Color.alpha(Presentation.Color.accent, 0.45 * decorItem.glow) }
+                    GradientStop { position: 1; color: Presentation.Color.alpha(Presentation.Color.accent, 0) }
                   }
                   startX: lightCone.ax; startY: lightCone.ay
                   PathLine { x: lightCone.bx; y: lightCone.by }
@@ -370,8 +341,8 @@ Panel {
                 x: decorItem.width * 0.15
                 y: decorItem.height
                 width: decorItem.width * 0.75
-                height: Style.space(2)
-                color: Qt.alpha(Color.accent, 0.55)
+                height: Presentation.Style.space(2)
+                color: Presentation.Color.alpha(Presentation.Color.accent, 0.55)
               }
 
               Image {
@@ -385,7 +356,7 @@ Panel {
                 anchors.fill: decorImage
                 source: decorImage
                 colorization: 1
-                colorizationColor: Color.accent
+                colorizationColor: Presentation.Color.accent
                 // Furniture stays in the background: dimmer than the pet.
                 opacity: 0.55
               }
@@ -396,8 +367,8 @@ Panel {
             id: bigPet
             anchors.centerIn: parent
             visible: !root.petIsOut && !root.exiting && !root.entering
-            width: Style.space(80)
-            height: Style.space(80)
+            width: Presentation.Style.space(80)
+            height: Presentation.Style.space(80)
             form: root.ready ? root.petService.form : "egg"
             anim: {
               if (!root.ready) return "idle"
@@ -408,7 +379,7 @@ Panel {
               return root.petService.stateAnim
             }
             frameMs: anim === "eat" ? 350 : 600
-            tint: Color.accent
+            tint: Presentation.Color.accent
 
             // Being scrubbed is wobbly business.
             SequentialAnimation {
@@ -450,14 +421,9 @@ Panel {
               travel += moved
               if (!scrubbing && travel > 12) {
                 scrubbing = true
-                if (root.ready && root.petService.dirtiness > 0) {
-                  root.petService.playSound("wash")
-                  scrubSoundTimer.restart()
-                }
               }
               if (scrubbing && root.ready && root.petService.dirtiness > 0) {
                 root.petService.scrub(moved * 0.03)
-                if (root.petService.dirtiness <= 0) scrubSoundTimer.stop()
                 travelSinceSparkle += moved
                 if (travelSinceSparkle > 50) {
                   travelSinceSparkle = 0
@@ -467,17 +433,7 @@ Panel {
                 }
               }
             }
-            // The scrubbing clip is ~3 s: keep it going for as long as the
-            // rubbing lasts and there is dirt left.
-            Timer {
-              id: scrubSoundTimer
-              interval: 3000
-              repeat: true
-              onTriggered: root.petService.playSound("wash")
-            }
-
             onReleased: {
-              scrubSoundTimer.stop()
               if (scrubbing) {
                 if (root.ready) root.petService.flushPet()
               } else {
@@ -496,8 +452,8 @@ Panel {
             Text {
               id: sparkleItem
               text: "✦"
-              color: Color.accent
-              font.pixelSize: Style.space(18)
+              color: Presentation.Color.accent
+              font.pixelSize: Presentation.Style.space(18)
               opacity: 0
 
               function pop(cx, cy) {
@@ -510,7 +466,7 @@ Panel {
                 id: sparkleAnimation
                 NumberAnimation {
                   target: sparkleItem; property: "y"
-                  from: sparkleItem.y; to: sparkleItem.y - Style.space(22)
+                  from: sparkleItem.y; to: sparkleItem.y - Presentation.Style.space(22)
                   duration: 600
                 }
                 NumberAnimation {
@@ -531,12 +487,12 @@ Panel {
             visible: !root.petIsOut && !root.exiting && !root.entering && root.ready
               && root.petService.sleeping
             text: "z z Z"
-            color: Color.accent
-            font.pixelSize: Style.space(16)
+            color: Presentation.Color.accent
+            font.pixelSize: Presentation.Style.space(16)
             anchors.left: bigPet.right
-            anchors.leftMargin: -Style.space(6)
+            anchors.leftMargin: -Presentation.Style.space(6)
             anchors.bottom: bigPet.top
-            anchors.bottomMargin: -Style.space(12)
+            anchors.bottomMargin: -Presentation.Style.space(12)
 
             SequentialAnimation {
               running: panelZzz.visible
@@ -553,12 +509,12 @@ Panel {
               && root.petService.emoteName !== ""
               && root.petService.transientAnim === ""
               && panelEmoteImage.status === Image.Ready
-            width: Style.space(32)
+            width: Presentation.Style.space(32)
             height: width
             anchors.left: bigPet.right
-            anchors.leftMargin: -Style.space(10)
+            anchors.leftMargin: -Presentation.Style.space(10)
             anchors.bottom: bigPet.top
-            anchors.bottomMargin: -Style.space(14)
+            anchors.bottomMargin: -Presentation.Style.space(14)
 
             property real bob: 0
             SequentialAnimation on bob {
@@ -585,15 +541,15 @@ Panel {
               source: panelEmoteImage
               colorization: 1
               // Same tint as the pet in the panel.
-              colorizationColor: Color.accent
+              colorizationColor: Presentation.Color.accent
             }
           }
 
           Text {
             id: panelHeart
             text: "♥"
-            color: Color.accent
-            font.pixelSize: Style.space(20)
+            color: Presentation.Color.accent
+            font.pixelSize: Presentation.Style.space(20)
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
             opacity: 0
@@ -604,7 +560,7 @@ Panel {
               id: panelHeartAnimation
               NumberAnimation {
                 target: panelHeart; property: "anchors.verticalCenterOffset"
-                from: -Style.space(20); to: -Style.space(50); duration: 700
+                from: -Presentation.Style.space(20); to: -Presentation.Style.space(50); duration: 700
               }
               SequentialAnimation {
                 NumberAnimation { target: panelHeart; property: "opacity"; from: 0; to: 1; duration: 150 }
@@ -629,12 +585,12 @@ Panel {
               : root.ready ? root.petService.moodLabel : "Waking up…"
             color: root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.body
+            font.pixelSize: Presentation.Style.font.body
             wrapMode: Text.Wrap
             renderType: Text.NativeRendering
           }
 
-          PanelActionButton {
+          Presentation.PanelActionButton {
             id: settingsButton
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
@@ -660,9 +616,9 @@ Panel {
               + (root.petService.generation > 1
                 ? " · Gen " + root.petService.generation : "")
             : ""
-          color: Qt.alpha(root.foreground, 0.6)
+          color: Presentation.Color.alpha(root.foreground, 0.6)
           font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
+          font.pixelSize: Presentation.Style.font.bodySmall
           renderType: Text.NativeRendering
 
           // The one hint the game gives about evolution — deliberately
@@ -673,14 +629,13 @@ Panel {
             hoverEnabled: true
             acceptedButtons: Qt.NoButton
           }
-          PanelToolTip {
-            visible: ageHover.containsMouse && root.ready
+          Presentation.ToolTip {
+            shown: ageHover.containsMouse && root.ready
             text: "It grows with time. Who it becomes reflects the care you gave it."
-            fontFamily: root.fontFamily
           }
         }
 
-        Button {
+        Presentation.Button {
           anchors.horizontalCenter: parent.horizontalCenter
           visible: root.ready && root.petService.stage === "adult"
             && !root.petService.farewellPending && !settingsControl.open
@@ -695,7 +650,7 @@ Panel {
 
         Column {
           width: parent.width
-          spacing: Style.space(8)
+          spacing: Presentation.Style.space(8)
           visible: !settingsControl.open
 
           Repeater {
@@ -708,28 +663,28 @@ Panel {
               id: needRow
               required property var modelData
               width: parent.width
-              spacing: Style.space(10)
+              spacing: Presentation.Style.space(10)
 
-              readonly property real actionSlot: Style.space(104)
+              readonly property real actionSlot: Presentation.Style.space(104)
 
               Column {
                 width: needRow.width - needRow.actionSlot - needRow.spacing
-                spacing: Style.space(3)
+                spacing: Presentation.Style.space(3)
                 anchors.verticalCenter: parent.verticalCenter
 
                 Text {
                   text: needRow.modelData.label
                   color: root.foreground
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.bodySmall
+                  font.pixelSize: Presentation.Style.font.bodySmall
                   renderType: Text.NativeRendering
                 }
 
                 Rectangle {
                   width: parent.width
-                  height: Style.space(6)
+                  height: Presentation.Style.space(6)
                   radius: height / 2
-                  color: Qt.alpha(root.foreground, 0.15)
+                  color: Presentation.Color.alpha(root.foreground, 0.15)
 
                   Rectangle {
                     // The bar shows wellbeing, so a rising need drains it.
@@ -737,7 +692,7 @@ Panel {
                     height: parent.height
                     radius: parent.radius
                     color: needRow.modelData.value >= 60
-                      ? Color.urgent : Color.accent
+                      ? Presentation.Color.urgent : Presentation.Color.accent
 
                     Behavior on width { NumberAnimation { duration: 300 } }
                   }
@@ -745,9 +700,9 @@ Panel {
 
                 Text {
                   text: needRow.modelData.hint
-                  color: Qt.alpha(root.foreground, 0.6)
+                  color: Presentation.Color.alpha(root.foreground, 0.6)
                   font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption !== undefined ? Style.font.caption : Style.font.bodySmall
+                  font.pixelSize: Presentation.Style.font.caption !== undefined ? Presentation.Style.font.caption : Presentation.Style.font.bodySmall
                   renderType: Text.NativeRendering
                 }
               }
@@ -757,7 +712,7 @@ Panel {
                 height: needRow.height
                 anchors.verticalCenter: parent.verticalCenter
 
-                Button {
+                Presentation.Button {
                   anchors.centerIn: parent
                   visible: needRow.modelData.action !== ""
                   text: needRow.modelData.actionLabel
@@ -778,81 +733,30 @@ Panel {
         }
 
         // --- settings -------------------------------------------------------
-        // Unfolded by the cogwheel in the card's top-right corner: effects
-        // volume, and where the pet goes out to play.
+        // Unfolded by the cogwheel: where the pet goes out to play.
         Column {
           id: settingsControl
           width: parent.width
-          spacing: Style.space(8)
+          spacing: Presentation.Style.space(8)
           visible: open
           property bool open: false
-          readonly property real volume: root.ready ? root.petService.soundVolume : 0.5
-
           Row {
-            spacing: Style.space(8)
-            anchors.horizontalCenter: parent.horizontalCenter
-
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              // Nerd Font speaker glyphs (nf-md-volume_off/low/medium/high),
-              // by code point so the icons survive any editor or tool that
-              // strips private-use characters.
-              text: String.fromCodePoint(settingsControl.volume <= 0 ? 0xF0581
-                : settingsControl.volume < 0.34 ? 0xF057F
-                : settingsControl.volume < 0.67 ? 0xF0580 : 0xF057E)
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              renderType: Text.NativeRendering
-            }
-
-            PanelSlider {
-              id: volumeSlider
-              bar: root.bar
-              width: Style.space(180)
-              anchors.verticalCenter: parent.verticalCenter
-              minimum: 0
-              maximum: 1
-              step: 0.05
-              value: settingsControl.volume
-              // Persist on release, and let it be heard right away.
-              onReleased: function(v) {
-                root.petService.updateSettings({ soundVolume: v })
-                Qt.callLater(function() { root.petService.playSound("hum") })
-              }
-              onRightClicked: root.petService.updateSettings({
-                soundVolume: settingsControl.volume > 0 ? 0 : 0.5 })
-            }
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              width: Style.space(36)
-              horizontalAlignment: Text.AlignRight
-              text: Math.round((volumeSlider.dragging ? volumeSlider.liveValue
-                : settingsControl.volume) * 100) + "%"
-              color: Qt.alpha(root.foreground, 0.7)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              renderType: Text.NativeRendering
-            }
-          }
-
-          Row {
-            spacing: Style.space(8)
+            spacing: Presentation.Style.space(8)
             anchors.horizontalCenter: parent.horizontalCenter
             // On a single screen every choice lands in the same place —
             // don't show a setting that cannot do anything.
-            visible: Quickshell.screens.length > 1
+            visible: root.ready && root.petService.connectedOutputs.length > 1
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
               text: "Roam screen"
               color: Qt.alpha(root.foreground, 0.7)
               font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
+              font.pixelSize: Presentation.Style.font.bodySmall
               renderType: Text.NativeRendering
             }
 
-            Button {
+            Presentation.Button {
               anchors.verticalCenter: parent.verticalCenter
               text: root.ready && root.petService.settings.roamScreen
                 ? root.petService.settings.roamScreen : "Where I click"
@@ -863,8 +767,8 @@ Panel {
               onClicked: {
                 // Cycle: follow the click, then each connected output.
                 var names = [""]
-                var screens = Quickshell.screens
-                for (var i = 0; i < screens.length; i++) names.push(screens[i].name)
+                var outputs = root.petService.connectedOutputs
+                for (var i = 0; i < outputs.length; i++) names.push(outputs[i])
                 var current = root.petService.settings.roamScreen || ""
                 var next = names[(names.indexOf(current) + 1) % names.length]
                 root.petService.updateSettings({ roamScreen: next })
@@ -874,11 +778,12 @@ Panel {
         }
 
         // --- go play / come home --------------------------------------------
-        Button {
+        Presentation.Button {
           width: parent.width
           visible: root.ready && !settingsControl.open
           text: root.ready && root.petService.settings.roamEnabled === true
-            ? "Come home" : "Go play"
+            ? "Come home" : root.ready && !root.petService.canRoam
+              ? "Too young to go play" : "Go play"
           tooltipText: root.ready && root.petService.canRoam
             ? "Let the pet roam and climb your windows"
             : "Too young to go out alone"
@@ -886,7 +791,17 @@ Panel {
           enabled: root.ready && root.petService.canRoam
             && !root.petService.farewellPending
           opacity: enabled ? 1 : 0.4
-          onClicked: root.runAction("roam")
+          onPressedChanged: {
+            if (!pressed) return
+            if (root.petService.settings.roamEnabled === true) {
+              if (runtime.requestSurfaceIntent("roam", "open", {output: ""}))
+                root.beginReturn()
+            } else if (runtime.requestSurfaceIntent("roam", "open", {
+              output: root.petService.settings.roamScreen || ""
+            })) {
+              root.beginExit()
+            }
+          }
         }
 
       }
@@ -907,14 +822,14 @@ Panel {
 
         PetSprite {
           id: exitPet
-          width: Style.space(80)
-          height: Style.space(80)
+          width: Presentation.Style.space(80)
+          height: Presentation.Style.space(80)
           form: root.ready ? root.petService.form : "egg"
           // Legs pumping on the way out; serenely carried on the way in.
           anim: root.entering ? "idle" : "walk"
           fallbackAnim: "idle"
           frameMs: 220
-          tint: Color.accent
+          tint: Presentation.Color.accent
 
           property real slideToY: 0
         }
@@ -952,7 +867,7 @@ Panel {
         }
       }
 
-      ConfirmDialog {
+      Presentation.ConfirmDialog {
         id: farewellConfirm
         anchors.fill: parent
         message: "Let your companion go? It will head out into the big wide world, and a new egg will appear."

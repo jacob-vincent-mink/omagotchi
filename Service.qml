@@ -1,44 +1,23 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
+import QtQml as Qml
+import Omarchy.PluginPresentation 1.0 as Presentation
 
-// Headless pet brain. Loaded once at shell startup, independent of the bar
-// widget, so the pet keeps living (and roaming) with the panel closed.
+// Headless pet brain. Loaded once per sandbox generation and shared by the
+// declared surfaces, so the pet keeps living with the panel closed.
 //
-// Needs follow the classic loop: they rise with active shell time so there is
-// always something to do, whatever the hardware. System state only flavors the
-// pace — pending updates make it hungrier faster, orphaned packages make it
-// get dirty faster. Nothing here depends on absolute machine performance.
-//
-// Commands executed (all fixed argv, read-only, no interpolation):
-//   checkupdates              pending official updates
-//   pacman -Qdtq              orphaned packages
+// Needs follow the classic loop: they rise with active runtime time so there
+// is always something to do. System state still flavors the pace through the
+// bounded package summary; without that optional provider, counts stay neutral.
 Item {
   id: root
-
-  property var shell: null
-  property var manifest: null
-
-  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME")
-    || ((Quickshell.env("HOME") || "") + "/.local/state")
-  readonly property string stateDir: stateHome + "/omarchy"
-  readonly property string settingsPath: stateDir + "/omagotchi-settings.json"
-  readonly property string petPath: stateDir + "/omagotchi-state.json"
 
   readonly property var defaultSettings: ({
     roamEnabled: false,
     roamScale: 3,
-    // Which output the pet roams on, named as Hyprland names it (whatever
-    // `hyprctl monitors` prints, e.g. "DP-1"). Empty keeps the default: the
-    // largest screen.
-    roamScreen: "",
-    soundVolume: 0.5
+    // The host projects only bounded connected-output names. Empty follows
+    // the output of the authenticated Go play / Come home source surface.
+    roamScreen: ""
   })
-  // Effects volume, 0 (mute) to 1.
-  readonly property real soundVolume: {
-    var v = Number(settings.soundVolume)
-    return isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5
-  }
   property var settings: defaultSettings
 
   // --- persistent pet facts --------------------------------------------------
@@ -46,7 +25,7 @@ Item {
   property double hatchedAtMs: 0
   property double lastPetMs: 0
 
-  // Growth, Gen1-chart style: the stage advances with active shell minutes,
+  // Growth, Gen1-chart style: the stage advances with active runtime minutes,
   // and the branch taken depends on average happiness over the stage.
   property string stage: "egg"     // egg | baby | child | teen | adult
   property string form: "egg"      // sprite prefix in assets/sprites/
@@ -66,11 +45,86 @@ Item {
   readonly property var knownForms: ["egg", "baby", "child", "teen_neat",
     "teen_scruffy", "adult_ace", "adult_ok", "adult_gremlin"]
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH") || ""
-  readonly property string notificationExecutable: omarchyPath !== ""
-    ? omarchyPath + "/bin/omarchy-notification-send"
-    : "omarchy-notification-send"
+  Presentation.PrivateStorage {
+    id: storage
+  }
 
+  property var pendingCalls: ({})
+  property var compositorSnapshot: ({ width: 0, height: 0, reservedBottom: 0, windows: [] })
+  property var connectedOutputs: []
+  property string requestedRoamOutput: ""
+  property bool compositorObservationPending: false
+  property bool packageSummaryPending: false
+  readonly property bool compositorObservationAvailable: {
+    return runtime.hasPermission("system.observe", "observe")
+  }
+  readonly property string compositorObservationState:
+    runtime.permissionState("system.observe", "observe")
+  function broker(capability, operation, arguments, completed) {
+    var call = runtime.invoke(capability, operation, arguments || {})
+    if (!call) { if (completed) completed(false, null); return }
+    pendingCalls[call.correlation] = completed || null
+    if (call.finished) finishBrokerCall(call)
+  }
+  function finishBrokerCall(call) {
+    var completed = pendingCalls[call.correlation]
+    delete pendingCalls[call.correlation]
+    if (completed) completed(call.ok, call.value, call)
+  }
+  function refreshCompositorSnapshot(output) {
+    if (!compositorObservationAvailable || compositorObservationPending) {
+      if (!compositorObservationAvailable)
+        compositorSnapshot = { width: 0, height: 0, reservedBottom: 0, windows: [] }
+      return
+    }
+    compositorObservationPending = true
+    broker("system.observe", "observe", {
+      dataset: "compositor.window-rectangles",
+      output: typeof output === "string" ? output : requestedRoamOutput
+    }, function(ok, value, call) {
+      compositorObservationPending = false
+      if (!ok || !call) {
+        compositorSnapshot = { width: 0, height: 0, reservedBottom: 0, windows: [] }
+        return
+      }
+      try {
+        var decoded = JSON.parse(call.utf8Text)
+        if (!decoded.ok || !Array.isArray(decoded.windows)
+            || !Array.isArray(decoded.outputs)) throw new Error("invalid snapshot")
+        connectedOutputs = decoded.outputs
+        compositorSnapshot = decoded
+      } catch (error) {
+        compositorSnapshot = { width: 0, height: 0, reservedBottom: 0, windows: [] }
+      }
+    })
+  }
+  function refreshPackageSummary() {
+    if (!runtime.hasPermission("system.observe", "observe") || packageSummaryPending)
+      return
+    packageSummaryPending = true
+    broker("system.observe", "observe", {
+      dataset: "packages.summary"
+    }, function(ok, value, call) {
+      packageSummaryPending = false
+      if (!ok || !call) return
+      try {
+        var decoded = JSON.parse(call.utf8Text)
+        if (!decoded.ok) return
+        var updates = Number(decoded.pendingUpdates)
+        var orphans = Number(decoded.orphanCount)
+        if (Number.isInteger(updates) && updates >= 0 && updates <= 100000)
+          pendingUpdates = updates
+        if (Number.isInteger(orphans) && orphans >= 0 && orphans <= 100000)
+          orphanCount = orphans
+      } catch (error) {
+        // Keep the last good bounded observation.
+      }
+    })
+  }
+  Qml.Connections {
+    target: runtime
+    function onCallFinished(call) { root.finishBrokerCall(call) }
+  }
   // --- probe results ---------------------------------------------------------
 
   property int pendingUpdates: 0
@@ -78,9 +132,9 @@ Item {
   property double nowMs: Date.now()
 
   property bool initialized: false
-  // State files are read through `head -c` so a huge or symlinked file can
-  // never be pulled whole into the shell; the plugin writes a few hundred
-  // bytes, anything hitting the cap is treated as corrupt.
+  // Brokered state reads are bounded before they enter QML. The plugin writes
+  // only a few hundred bytes; anything hitting this stricter parser cap is
+  // treated as corrupt.
   readonly property int maxStateBytes: 65536
   property bool settingsFileLoaded: false
   property bool petFileLoaded: false
@@ -111,19 +165,10 @@ Item {
     egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult"
   })[stage] || stage
 
-  // Where the pet left its panel, in screen coordinates (center x, feet y),
-  // so the roaming window can pick up the fall right under the card. Negative
-  // x means "no handoff": spawn at the usual floor spot.
-  property real handoffX: -1
-  property real handoffY: -1
-  property string handoffScreen: ""
-  // The screen Go play / Come home was last clicked on. Runtime-only: after
-  // a shell restart the playground falls back to the usual screen choice.
-  property string requestedScreenName: ""
-
-  // Set by the panel to call the pet home through the tractor beam; the roam
-  // window beams it up to the handoff spot, then clears this and fires
-  // arrivedHome so the panel can play the entrance.
+  // Surface-local coordinates are intentionally shared as normalized values:
+  // the sandbox knows each allocation, while the host keeps global placement.
+  property real handoffXRatio: -1
+  property real handoffYRatio: -1
   property bool returnRequested: false
   signal arrivedHome()
 
@@ -152,7 +197,6 @@ Item {
       root.wokenForCare = false
       if (root.tirednessLevel < 60 || root.roaming) return
       root.sleeping = true
-      root.playSound("sleep")
       root.flushPet()
     }
   }
@@ -263,8 +307,6 @@ Item {
     if (stage === "egg") return // an egg has no needs yet
     var rates = stageRates[stage] || stageRates.adult
 
-    // Out and about, it hums to itself once or twice an hour.
-    if (roaming && !sleeping && Math.random() < 1.5 / 60) playSound("hum")
 
     hungerLevel = Math.min(100,
       hungerLevel + (pendingUpdates > 0 ? 0.5 : 0.33) * rates.hunger)
@@ -275,15 +317,12 @@ Item {
       tirednessLevel = Math.max(0, tirednessLevel - 2.2)
       if (tirednessLevel <= 5) {
         sleeping = false
-        // A little hum tells the user it woke up on its own.
-        playSound("hum")
       }
     } else {
       tirednessLevel = Math.min(100,
         tirednessLevel + (roaming ? 0.55 : 0.28) * rates.tired)
       if (tirednessLevel >= 90) {
         sleeping = true
-        playSound("sleep")
       } else if (tirednessLevel >= 60 && !roaming && !resleepTimer.running) {
         // Sleepy at home with nothing better to do: doze off shortly.
         // The timer re-checks (eating, care animation) before committing.
@@ -324,59 +363,12 @@ Item {
     careSum = 0
     careCount = 0
     flushPet()
-    playSound(nextStage === "baby" ? "hatch" : "evolve")
     notify("Omagotchi", message)
   }
 
-  // --- sounds ----------------------------------------------------------------
-
-  // One short clip per event, named after the event so better sounds can be
-  // dropped in without touching code. The current set is placeholders reused
-  // from the tomato-timer plugin's library — see CREDITS.md.
-  // One file per event, or a list to pick from at random (see CREDITS.md).
-  readonly property var eventSounds: ({
-    hatch: "hatch.wav",
-    evolve: "evolve.wav",
-    eat: "eat.wav",
-    wash: "wash.wav",
-    pet: ["pet.wav", "pet2.wav"],
-    hum: "humming.wav",
-    grab: "grab.wav",
-    sleep: "sleep.mp3",
-    stun: "stun.mp3",
-    land: "fall.wav",
-    beamCharge: "subbass.wav",
-    beam: "tractorbeam.wav",
-    ball: "balloon.wav",
-    farewell_ace: "farewell_ace.wav",
-    farewell_ok: "farewell_ok.mp3",
-    farewell_gremlin: "farewell_gremlin.mp3"
-  })
-
-  // pw-play wants a filesystem path, not a file:// URL.
-  function soundPath(relativePath) {
-    var url = Qt.resolvedUrl(relativePath).toString()
-    if (url.indexOf("file://") === 0) url = url.substring(7)
-    return decodeURIComponent(url)
-  }
-
-  function playSound(event) {
-    if (soundVolume <= 0) return
-    var file = eventSounds[event]
-    if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
-    if (!file) return
-    Quickshell.execDetached(["pw-play", "--volume", soundVolume.toFixed(2),
-      soundPath("sounds/" + file)])
-  }
-
   function notify(title, body) {
-    Quickshell.execDetached([
-      notificationExecutable,
-      "--app-name", "omagotchi",
-      "-u", "normal",
-      title,
-      body
-    ])
+    if (runtime.hasPermission("notifications.send", "send"))
+      broker("notifications.send", "send", { category: "pet-care", title: title, body: body })
   }
 
   // --- actions ---------------------------------------------------------------
@@ -399,7 +391,6 @@ Item {
     wakeForCare()
     transientAnim = "eat"
     transientTimer.stop()
-    playSound("eat")
     if (hungerLevel > 0) eatTimer.restart()
     else {
       // Nothing to eat: a polite nibble, then back to whatever it was doing.
@@ -431,10 +422,6 @@ Item {
     if (stage !== "adult" || farewellPending) return
     wakeUp()
     farewellPending = true
-  }
-
-  function farewellSoundEvent() {
-    return "farewell_" + form.replace("adult_", "")
   }
 
   function sendOff() {
@@ -477,10 +464,7 @@ Item {
     lastPetMs = Date.now()
     nowMs = lastPetMs
     lonelinessLevel = Math.max(0, lonelinessLevel - 10)
-    // Cuddles only entertain a pet too little to go out; once it can
-    // roam, boredom is cured outside.
     if (!canRoam) boredomLevel = Math.max(0, boredomLevel - 10)
-    playSound("pet")
     flushPet()
   }
 
@@ -493,33 +477,10 @@ Item {
   }
 
   // A big fall hurts its feelings too: the inverse of a petting.
-  // A big fall: the thud first, the dizzy jingle right after it.
   function stunShock() {
     lonelinessLevel = Math.min(100, lonelinessLevel + 10)
-    playSound("land")
-    stunSoundTimer.restart()
     flushPet()
   }
-  Timer {
-    id: stunSoundTimer
-    interval: 450
-    onTriggered: root.playSound("stun")
-  }
-
-  // The tractor beam: a low thrum powering up, then the beam itself. On the
-  // way home it is mirrored: the beam plays out (~2.7 s), then the thrum.
-  function playBeamSound(homeward) {
-    beamSoundTimer.second = homeward ? "beamCharge" : "beam"
-    beamSoundTimer.interval = homeward ? 2700 : 650
-    playSound(homeward ? "beam" : "beamCharge")
-    beamSoundTimer.restart()
-  }
-  Timer {
-    id: beamSoundTimer
-    property string second: "beam"
-    onTriggered: root.playSound(second)
-  }
-
   function updateSettings(patch) {
     var merged = {}
     for (var key in defaultSettings) merged[key] = defaultSettings[key]
@@ -615,8 +576,8 @@ Item {
 
     initialized = true
     if (saveProblem !== "") {
-      console.warn("omagotchi: save file " + petPath + " " + saveProblem + " — starting over")
-      notify("Omagotchi couldn't read its save file",
+      console.warn("omagotchi: private state " + saveProblem + " — starting over")
+      notify("Omagotchi couldn't read its private state",
              "It was corrupt or oversized, so a fresh egg takes over.")
     }
     if (hatch) flushPet()
@@ -634,32 +595,21 @@ Item {
 
   // --- probes ----------------------------------------------------------------
 
-  Process {
+  QtObject {
     id: updatesProc
-    command: ["checkupdates"]
-    stdout: StdioCollector { id: updatesOut }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
-        var text = updatesOut.text.trim()
-        root.pendingUpdates = text === "" ? 0 : text.split("\n").length
-      } else if (exitCode === 2) {
-        root.pendingUpdates = 0
-      }
-      // exit 1 = error (offline, db lock): keep the previous value.
+    property bool running: false
+    onRunningChanged: if (running) {
+      root.refreshPackageSummary()
+      running = false
     }
   }
 
-  Process {
+  QtObject {
     id: orphansProc
-    command: ["pacman", "-Qdtq"]
-    stdout: StdioCollector { id: orphansOut }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
-        var text = orphansOut.text.trim()
-        root.orphanCount = text === "" ? 0 : text.split("\n").length
-      } else {
-        root.orphanCount = 0
-      }
+    property bool running: false
+    onRunningChanged: if (running) {
+      root.refreshPackageSummary()
+      running = false
     }
   }
 
@@ -678,8 +628,7 @@ Item {
       if (root.careCount % 5 === 0) root.flushPet()
     }
   }
-  // Both probes only flavor the pace, so every 30 minutes is plenty (and
-  // checkupdates syncs its own db copy each time).
+  // Both bounded probes only flavor the pace, so every 30 minutes is plenty.
   Timer {
     interval: 30 * 60 * 1000
     running: root.initialized
@@ -693,88 +642,44 @@ Item {
     onTriggered: updatesProc.running = true
   }
 
-  // --- roaming ---------------------------------------------------------------
-
-  // Outputs coming and going (monitors powered off, lock, unplug) destroy the
-  // roam layer surface while QML still believes the window is visible — the
-  // pet keeps "roaming" with nowhere to be drawn, and the return sequence's
-  // visible-gated timers never fire. Dropping visibility for a beat after the
-  // screen list settles forces Quickshell to map a fresh surface.
-  property bool screensSettled: true
-  Connections {
-    target: Quickshell
-    function onScreensChanged() {
-      root.screensSettled = false
-      screensSettleTimer.restart()
-    }
-  }
-  Timer {
-    id: screensSettleTimer
-    interval: 1000
-    onTriggered: root.screensSettled = true
-  }
-
-  // Deliberately a static window with a visibility binding, not a Loader:
-  // dynamically created windows leak a zombie layer surface across the shell's
-  // plugin hot-reload, which then wedges screencopy (grim) on that output.
-  RoamWindow {
-    petService: root
-    visible: root.initialized && root.roaming && root.screensSettled
-  }
-
   // --- persistence -----------------------------------------------------------
 
-  // Bounded reads: at most maxStateBytes per file, once at startup. A file
-  // that fills the cap (or can't be read) counts as empty → defaults.
-  function boundedText(collector, exitCode) {
-    if (exitCode !== 0) return ""
-    var text = collector.text
-    return text.length >= maxStateBytes ? "" : text
-  }
-
-  Process {
-    id: settingsReader
-    command: ["head", "-c", String(root.maxStateBytes), root.settingsPath]
+  Qml.Timer {
+    interval: 0
     running: true
-    stdout: StdioCollector { id: settingsOut }
-    onExited: function(exitCode) {
-      root.loadedSettingsText = root.boundedText(settingsOut, exitCode)
-      root.settingsFileLoaded = true
-      root.initializeIfReady()
+    repeat: false
+    onTriggered: {
+      root.refreshCompositorSnapshot()
+      storage.readText("settings", function(text) {
+        root.loadedSettingsText = text || ""
+        root.settingsFileLoaded = true
+        root.initializeIfReady()
+      }, function() {
+        root.loadedSettingsText = ""
+        root.settingsFileLoaded = true
+        root.initializeIfReady()
+      })
+      storage.readText("pet-state", function(text) {
+        root.loadedPetText = text || ""
+        root.petFileLoaded = true
+        root.initializeIfReady()
+      }, function() {
+        root.loadedPetText = ""
+        root.petFileLoaded = true
+        root.initializeIfReady()
+      })
     }
   }
 
-  Process {
-    id: petReader
-    command: ["head", "-c", String(root.maxStateBytes), root.petPath]
-    running: true
-    stdout: StdioCollector { id: petOut }
-    onExited: function(exitCode) {
-      root.loadedPetText = root.boundedText(petOut, exitCode)
-      if (exitCode === 0 && petOut.text.length >= root.maxStateBytes)
-        root.petReadProblem = "exceeds " + root.maxStateBytes + " bytes"
-      root.petFileLoaded = true
-      root.initializeIfReady()
-    }
-  }
-
-  // Write-only views: preload off, text() is never called, so the shell
-  // never maps these files itself.
-  FileView {
+  // These tiny adapters keep persistence call sites local while all durable
+  // writes remain broker operations.
+  QtObject {
     id: settingsFile
-    path: root.settingsPath
-    preload: false
-    watchChanges: false
-    atomicWrites: true
-    printErrors: false
+    function setText(text) { storage.writeText("settings", text, function() {}, function() {}) }
   }
 
-  FileView {
+  QtObject {
     id: petFile
-    path: root.petPath
-    preload: false
-    watchChanges: false
-    atomicWrites: true
-    printErrors: false
+    function setText(text) { storage.writeText("pet-state", text, function() {}, function() {}) }
   }
 }

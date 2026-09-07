@@ -1,71 +1,43 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
-import Quickshell
-import Quickshell.Wayland
-import Quickshell.Hyprland
-import qs.Commons
+import Omarchy.PluginPresentation 1.0
 
 // The pet's playground: a transparent full-screen overlay where it wanders the
 // bottom edge, climbs up the sides of windows whose top border leaves enough
 // headroom, walks along their tops, and hops back down. Everything is
 // click-through except the pet itself (mask), so the desktop stays usable.
 //
-// Window geometry comes from the Hyprland IPC via Quickshell — no shell
-// commands. Coordinates are used as-is, which is correct at monitor scale 1;
-// fractional scaling support is a known TODO.
-PanelWindow {
+// Window geometry is a bounded host snapshot: monitor-local rectangles and
+// opaque per-session identities only. Titles, classes, PIDs, addresses, and
+// workspace metadata never enter the plugin sandbox.
+Item {
   id: root
 
-  required property var petService
+  property var petService: SharedService
 
-  // The output named by the roamScreen setting, if it is currently connected.
-  readonly property string preferredScreenName: {
-    var name = petService && petService.settings ? petService.settings.roamScreen : ""
-    return typeof name === "string" ? name : ""
+  function receiveSurfaceIntent(data) {
+    var output = data && typeof data.output === "string" ? data.output : ""
+    if (petService) {
+      petService.requestedRoamOutput = output
+      petService.refreshCompositorSnapshot(output)
+    }
+    resetPosition()
   }
 
-  // The playground, by priority: the screen pinned by the roamScreen setting,
-  // else the screen Go play / Come home was clicked on, else the largest one.
-  // Largest-only sent the pet to whichever monitor has the most pixels, which
-  // on a mixed desk is often not the one being worked on — it looked like
-  // "Go play" did nothing at all.
-  screen: {
-    var screens = Quickshell.screens
-    var i
-    if (preferredScreenName !== "") {
-      for (i = 0; i < screens.length; i++)
-        if (screens[i].name === preferredScreenName) return screens[i]
-      // Named screen unplugged: fall through rather than leave the pet homeless.
-    }
-    var clicked = petService ? petService.requestedScreenName : ""
-    if (clicked !== "") {
-      for (i = 0; i < screens.length; i++)
-        if (screens[i].name === clicked) return screens[i]
-    }
-    var best = null
-    for (i = 0; i < screens.length; i++) {
-      if (!best || screens[i].width * screens[i].height > best.width * best.height)
-        best = screens[i]
-    }
-    return best
-  }
-
-  anchors {
-    left: true
-    right: true
-    top: true
-    bottom: true
-  }
-  color: "transparent"
-  exclusionMode: ExclusionMode.Ignore
-  WlrLayershell.layer: WlrLayer.Top
-  WlrLayershell.namespace: "omagotchi"
-  // Click-through everywhere except the pet — except mid-press, where the
-  // whole window catches input: on an empty workspace Hyprland drops the
-  // implicit grab on layer surfaces, so a cursor outrunning the sprite would
-  // leave the input region and freeze the drag midair.
-  mask: Region { item: grabArea.pressed ? root.contentItem : sprite }
+  width: 2048
+  height: 2048
+  property var inputRegions: petService && petService.roaming ? (grabArea.pressed ? [{
+    x: 0, y: 0, width: width, height: height
+  }] : [{
+    x: Math.max(0, Math.min(width - sprite.width, sprite.x)),
+    y: Math.max(0, Math.min(height - sprite.height, sprite.y)),
+    width: sprite.width,
+    height: sprite.height
+  }]) : []
+  opacity: petService && petService.roaming ? 1 : 0
 
   readonly property int petScale: {
     var value = petService && petService.settings
@@ -76,13 +48,12 @@ PanelWindow {
   // Headroom above a platform so the pet never pokes off-screen.
   readonly property int headroom: spriteSize + 12
 
-  readonly property var hyprMonitor: Hyprland.monitorFor(root.screen)
+  readonly property var compositorSnapshot: petService
+    ? petService.compositorSnapshot : ({ width: 0, height: 0, reservedBottom: 0, windows: [] })
 
   // The bar's reserved strip, so the floor sits above a bottom bar.
   readonly property real floorY: {
-    var ipc = hyprMonitor ? hyprMonitor.lastIpcObject : null
-    var reservedBottom = ipc && ipc.reserved && ipc.reserved.length > 3
-      ? Number(ipc.reserved[3]) : 0
+    var reservedBottom = Number(compositorSnapshot.reservedBottom || 0)
     return height - reservedBottom
   }
 
@@ -95,30 +66,25 @@ PanelWindow {
   property var support: null
 
   function rebuildPlatforms() {
-    if (!hyprMonitor) { platforms = []; validateSupport(); return }
-    var ws = hyprMonitor.activeWorkspace ? hyprMonitor.activeWorkspace.id : -1
-    var list = []
-    var toplevels = Hyprland.toplevels.values
-    for (var i = 0; i < toplevels.length; i++) {
-      var toplevel = toplevels[i]
-      var ipc = toplevel.lastIpcObject
-      if (!ipc || !ipc.at || !ipc.size) continue
-      if (!toplevel.workspace || toplevel.workspace.id !== ws) continue
-      if (ipc.hidden === true || ipc.mapped === false) continue
-      if (ipc.fullscreen) continue
-      var y = ipc.at[1] - hyprMonitor.y
-      var x1 = ipc.at[0] - hyprMonitor.x
-      var x2 = x1 + ipc.size[0]
-      // Keep only tops the pet can stand on without leaving the screen, and
-      // that are actually above the floor.
-      if (y < root.headroom || y > root.floorY - 10) continue
-      x1 = Math.max(0, x1)
-      x2 = Math.min(root.width, x2)
-      if (x2 - x1 < root.spriteSize * 2) continue
-      list.push({ x1: x1, x2: x2, y: y, address: toplevel.address })
+    var observed = compositorSnapshot.windows
+    var next = []
+    if (Array.isArray(observed)) {
+      for (var i = 0; i < observed.length && i < 64; ++i) {
+        var window = observed[i]
+        var x1 = Math.max(0, Math.min(width, Number(window.x)))
+        var x2 = Math.max(x1, Math.min(width, x1 + Number(window.width)))
+        var y = Math.max(headroom, Math.min(floorY, Number(window.y)))
+        if (String(window.id || "") !== "" && x2 - x1 >= spriteSize)
+          next.push({x1: x1, x2: x2, y: y, address: String(window.id)})
+      }
     }
-    platforms = list
+    platforms = next
     validateSupport()
+  }
+
+  Connections {
+    target: root.petService
+    function onCompositorSnapshotChanged() { root.rebuildPlatforms() }
   }
 
   // The world changed under the pet's feet: follow the window it stands on
@@ -192,26 +158,18 @@ PanelWindow {
     action = "fall"
   }
 
-  // The way home: the beam reaches down from the card's bottom edge and
-  // pulls the pet up, wherever it is. Without a usable anchor (panel on
-  // another screen), it just pops home like before.
   function startReturn() {
     var svc = petService
     if (!svc) return
-    if (!(svc.handoffX >= 0) || !screen || svc.handoffScreen !== screen.name) {
-      finishReturn()
-      return
-    }
     pendingClimb = null
     support = null
     gentleFall = false
-    beamX = Math.max(spriteSize / 2,
-      Math.min(width - spriteSize / 2, svc.handoffX))
-    beamTopY = svc.handoffY
-    // The pet pops onto the beam's axis at floor level and rides straight
-    // up — the beam stays perfectly vertical.
+    beamX = Math.max(spriteSize / 2, Math.min(width - spriteSize / 2,
+      Math.max(0, svc.handoffXRatio) * width))
+    beamTopY = Math.max(0, Math.min(height,
+      Math.max(0, svc.handoffYRatio) * height))
     petX = beamX - spriteSize / 2
-    petY = Math.max(beamTopY + 1, floorY)
+    petY = floorY
     beamActive = true
     action = "beamup"
   }
@@ -220,48 +178,18 @@ PanelWindow {
     var svc = petService
     beamActive = false
     action = "idle"
-    if (svc) {
-      svc.returnRequested = false
-      svc.handoffX = -1
-      svc.handoffY = -1
-      svc.handoffScreen = ""
-      svc.arrivedHome()
-      svc.setRoamEnabled(false)
-    }
+    if (!svc) return
+    svc.returnRequested = false
+    svc.handoffXRatio = -1
+    svc.handoffYRatio = -1
+    svc.setRoamEnabled(false)
+    svc.arrivedHome()
   }
 
   Connections {
     target: root.petService
     function onReturnRequestedChanged() {
-      if (!root.petService.returnRequested || !root.visible) return
-      if (root.screen && root.petService.handoffScreen === root.screen.name) {
-        root.startReturn()
-        return
-      }
-      // A cross-screen Come home first moves the playground onto the panel's
-      // screen, and that surface hop is asynchronous — wait for it to land
-      // before anchoring the beam instead of popping home on the mismatch.
-      returnWait.tries = 0
-      returnWait.restart()
-    }
-  }
-
-  Timer {
-    id: returnWait
-    interval: 100
-    repeat: true
-    property int tries: 0
-    onTriggered: {
-      var svc = root.petService
-      if (!svc || !svc.returnRequested) { stop(); return }
-      if (root.screen && svc.handoffScreen === root.screen.name) {
-        stop()
-        root.startReturn()
-      } else if (++tries > 15) {
-        // The playground never made it over: pop home like before.
-        stop()
-        root.finishReturn()
-      }
+      if (root.petService.returnRequested && root.visible) root.startReturn()
     }
   }
 
@@ -374,7 +302,6 @@ PanelWindow {
     } else if (leavingPhase === 1) {
       leavingPhase = 2
       facingLeft = leavingCornerX > 0
-      svc.playSound(svc.farewellSoundEvent())
       goodbyeTimer.restart()
     } else if (leavingPhase === 3) {
       leavingPhase = 0
@@ -440,38 +367,20 @@ PanelWindow {
 
   // --- keeping up with the compositor ---------------------------------------
 
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      switch (event.name) {
-      case "openwindow":
-      case "closewindow":
-      case "movewindow":
-      case "movewindowv2":
-      case "resizewindow":
-      case "workspace":
-      case "workspacev2":
-      case "changefloatingmode":
-      case "fullscreen":
-      case "focusedmon":
-        refreshDebounce.restart()
-      }
-    }
-  }
-
   Timer {
     id: refreshDebounce
     interval: 250
-    onTriggered: {
-      Hyprland.refreshToplevels()
-      rebuildDelay.restart()
-    }
+    onTriggered: rebuildDelay.restart()
   }
   // lastIpcObject updates arrive shortly after the refresh request.
   Timer {
     id: rebuildDelay
     interval: 350
-    onTriggered: root.rebuildPlatforms()
+    onTriggered: {
+      if (root.petService)
+        root.petService.refreshCompositorSnapshot(root.petService.requestedRoamOutput)
+      root.rebuildPlatforms()
+    }
   }
   // Fallback sweep for anything the event filter misses.
   Timer {
@@ -485,38 +394,24 @@ PanelWindow {
     support = null
     pendingClimb = null
     var svc = petService
-    var w = width > 0 ? width : (screen ? screen.width : 0)
-    if (svc && svc.returnRequested) {
-      // Mid Come-home hop between screens: the freshly landed surface must
-      // not mistake the pending handoff for an exit (beam-in) — stand by on
-      // the floor and leave the handoff for the return sequence to consume.
-      beamActive = false
-      petX = Math.max(0, w / 2 - spriteSize / 2)
-      petY = floorY
-      action = "idle"
-      refreshDebounce.restart()
-      return
-    }
-    if (svc && svc.handoffX >= 0 && screen && svc.handoffScreen === screen.name) {
-      // The pet just dropped out of its panel: continue that fall from right
-      // under the card instead of teleporting to the floor.
-      petX = Math.max(0, Math.min(w - spriteSize, svc.handoffX - spriteSize / 2))
-      petY = Math.max(headroom, Math.min(floorY > 0 ? floorY : svc.handoffY, svc.handoffY))
+    var w = width
+    if (svc && svc.handoffXRatio >= 0 && !svc.returnRequested) {
+      petX = Math.max(0, Math.min(w - spriteSize,
+        svc.handoffXRatio * w - spriteSize / 2))
+      petY = Math.max(headroom, Math.min(floorY,
+        svc.handoffYRatio * height))
       beamX = petX + spriteSize / 2
-      beamTopY = svc.handoffY
+      beamTopY = petY
       beamActive = true
       gentleFall = true
       startFall()
+      svc.handoffXRatio = -1
+      svc.handoffYRatio = -1
     } else {
       beamActive = false
       petX = Math.max(0, w / 2 - spriteSize / 2)
       petY = floorY
       action = "idle"
-    }
-    if (svc) {
-      svc.handoffX = -1
-      svc.handoffY = -1
-      svc.handoffScreen = ""
     }
     refreshDebounce.restart()
   }
@@ -562,8 +457,8 @@ PanelWindow {
       fillGradient: LinearGradient {
         x1: root.beamX; y1: root.beamTopY
         x2: root.beamX; y2: root.petY
-        GradientStop { position: 0; color: Qt.alpha(Color.accent, 0.5 * beam.beamPulse) }
-        GradientStop { position: 1; color: Qt.alpha(Color.accent, 0.08 * beam.beamPulse) }
+        GradientStop { position: 0; color: Color.alpha(Color.accent, 0.5 * beam.beamPulse) }
+        GradientStop { position: 1; color: Color.alpha(Color.accent, 0.08 * beam.beamPulse) }
       }
       startX: root.beamX - root.spriteSize * 0.3
       startY: root.beamTopY
@@ -626,7 +521,7 @@ PanelWindow {
       property bool dragging: false
 
       onPressed: function(mouse) {
-        var p = mapToItem(root.contentItem, mouse.x, mouse.y)
+        var p = mapToItem(root, mouse.x, mouse.y)
         pressGlobalX = p.x
         pressGlobalY = p.y
         grabDx = p.x - root.petX
@@ -635,7 +530,7 @@ PanelWindow {
       }
       onPositionChanged: function(mouse) {
         if (!pressed) return
-        var p = mapToItem(root.contentItem, mouse.x, mouse.y)
+        var p = mapToItem(root, mouse.x, mouse.y)
         if (!dragging) {
           if (Math.abs(p.x - pressGlobalX) < 8 && Math.abs(p.y - pressGlobalY) < 8) return
           dragging = true
@@ -646,7 +541,6 @@ PanelWindow {
           root.beamActive = false
           if (root.petService) {
             root.petService.wakeUp()
-            root.petService.playSound("grab")
           }
         }
         root.petX = Math.max(0, Math.min(root.width - root.spriteSize, p.x - grabDx))
@@ -782,7 +676,7 @@ PanelWindow {
     y: root.petY - root.spriteSize - height / 2
 
     SequentialAnimation on opacity {
-      running: visible
+      running: root.visible
       loops: Animation.Infinite
       NumberAnimation { from: 0.25; to: 1; duration: 1300 }
       NumberAnimation { from: 1; to: 0.25; duration: 1300 }

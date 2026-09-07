@@ -1,83 +1,29 @@
 import QtQuick
-import qs.Commons
-import qs.Ui
+import Omarchy.PluginPresentation 1.0
 
 // Bar button: the pet's face, breathing slowly. Left click opens its home,
 // middle click is a quick pet on the head.
-BarWidget {
+Item {
   id: root
-  moduleName: "slcode777.omagotchi"
 
-  readonly property var petService: bar && bar.shell
-    ? bar.shell.serviceFor(moduleName)
-    : null
-
-  // Panel lifecycle forwarding, required by the bar's popout switching.
-  readonly property bool opened: panelLoader.item
-    ? panelLoader.item.opened === true
-    : false
-  readonly property bool popoutSwitchClosing: panelLoader.item
-    ? panelLoader.item.popoutSwitchClosing === true
-    : false
-  readonly property real openPanelIndicatorWidth: content.implicitWidth
-  readonly property real openPanelIndicatorHeight: content.implicitHeight
-
+  readonly property var petService: SharedService
+  property var inputRegions: [{ x: 0, y: 0, width: width, height: height }]
   readonly property bool serviceReady: !!petService && petService.initialized === true
+  readonly property string tooltipText: serviceReady ? petService.moodLabel : "Omagotchi"
 
-  function injectPanel() {
-    var target = panelLoader.item
-    if (!target) return
-    if ("bar" in target) target.bar = root.bar
-    if ("settings" in target) target.settings = root.settings
-    if ("anchorItem" in target) target.anchorItem = button
-    if ("hostWidget" in target) target.hostWidget = root
-    if ("petService" in target) target.petService = root.petService
-  }
+  implicitWidth: Style.bar.statusSlot
+  implicitHeight: Style.bar.size
 
-  function open() { if (panelLoader.item) panelLoader.item.open() }
-  function close() { if (panelLoader.item) panelLoader.item.close() }
-  function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
-  function closeForPopoutSwitch() {
-    if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
-  }
-
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
-
-  onBarChanged: Qt.callLater(injectPanel)
-  onSettingsChanged: Qt.callLater(injectPanel)
-  onPetServiceChanged: Qt.callLater(injectPanel)
-  Component.onCompleted: Qt.callLater(injectPanel)
-
-  Loader {
-    id: panelLoader
-    active: true
-    source: Qt.resolvedUrl("Panel.qml")
-    visible: false
-    onLoaded: root.injectPanel()
-  }
-
-  WidgetButton {
+  Rectangle {
     id: button
     anchors.fill: parent
-    bar: root.bar
-    labelVisible: false
-    hasVisualContent: true
-    dimmed: !root.serviceReady
-    tooltipText: root.serviceReady ? root.petService.moodLabel : "Omagotchi"
-    fixedWidth: root.vertical ? -1 : Math.round(content.implicitWidth + scaledHorizontalMargin * 2)
-    fixedHeight: root.vertical ? Math.round(content.implicitHeight + scaledVerticalPadding * 2) : -1
-
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.LeftButton) root.toggle()
-      else if (buttonCode === Qt.MiddleButton && root.serviceReady) root.petService.petThePet()
-    }
+    color: "transparent"
 
     Item {
       id: content
       anchors.centerIn: parent
-      implicitWidth: Style.bar.iconCanvas
-      implicitHeight: Style.bar.iconCanvas
+      width: Style.font.icon
+      height: Style.font.icon
 
       PetSprite {
         anchors.fill: parent
@@ -88,7 +34,21 @@ BarWidget {
           && root.petService.mood !== "happy" && root.petService.mood !== "egg"
           && root.petService.mood !== "sleeping"
           ? 350 : 900
-        tint: button.foreground
+        tint: root.serviceReady ? Color.bar.text : Color.alpha(Color.bar.text, 0.45)
+      }
+    }
+
+    MouseArea {
+      id: pointer
+      anchors.fill: parent
+      acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onPressed: function(mouse) {
+        if (mouse.button === Qt.LeftButton)
+          runtime.requestSurfaceIntent("panel", "toggle")
+        else if (mouse.button === Qt.MiddleButton && root.serviceReady)
+          root.petService.petThePet()
       }
     }
   }
