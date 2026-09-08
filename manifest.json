@@ -6,7 +6,10 @@
   "author": "SLcode777",
   "license": "MIT",
   "description": "A 1-bit desktop pet in your bar, in the spirit of the 1997 originals: feed it, scrub it clean, cuddle it, and let it out to roam your screen and climb your windows. It hatches, grows, and evolves with the care you give.",
-  "kinds": ["service", "bar-widget"],
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
   "entryPoints": {
     "service": "Service.qml",
     "barWidget": "BarWidget.qml"
@@ -17,5 +20,57 @@
     "category": "Fun",
     "allowMultiple": false,
     "defaultSection": "right"
+  },
+  "sandbox": {
+    "version": 1,
+    "requests": {
+      "notifications": true,
+      "storage": true,
+      "exec": {
+        "pw-play": {
+          "executable": "/usr/bin/pw-play",
+          "tree": {
+            "next": [
+              {
+                "arg": { "kind": "exact", "value": "--volume" },
+                "then": {
+                  "next": [
+                    {
+                      "arg": { "kind": "pattern", "value": "(?:0\\.[0-9]{1,2}|1\\.00)", "max": 20 },
+                      "then": {
+                        "next": [
+                          {
+                            "arg": { "kind": "oneOf", "values": [
+                              "$OMARCHY_PLUGIN_PATH/sounds/balloon.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/eat.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/evolve.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/fall.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_ace.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_gremlin.mp3",
+                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_ok.mp3",
+                              "$OMARCHY_PLUGIN_PATH/sounds/hatch.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/humming.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/pet.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/pet2.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/sleep.mp3",
+                              "$OMARCHY_PLUGIN_PATH/sounds/stun.mp3",
+                              "$OMARCHY_PLUGIN_PATH/sounds/subbass.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/tractorbeam.wav",
+                              "$OMARCHY_PLUGIN_PATH/sounds/wash.wav"
+                            ] },
+                            "then": { "end": "play" }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "required": []
+        }
+      }
+    }
   }
 }

@@ -62,11 +62,6 @@ Item {
   readonly property var knownForms: ["egg", "baby", "child", "teen_neat",
     "teen_scruffy", "adult_ace", "adult_ok", "adult_gremlin"]
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH") || ""
-  readonly property string notificationExecutable: omarchyPath !== ""
-    ? omarchyPath + "/bin/omarchy-notification-send"
-    : "omarchy-notification-send"
-
   // --- probe results ---------------------------------------------------------
 
   property int pendingUpdates: 0
@@ -337,30 +332,24 @@ Item {
     farewell_gremlin: "farewell_gremlin.mp3"
   })
 
-  // pw-play wants a filesystem path, not a file:// URL.
-  function soundPath(relativePath) {
-    var url = Qt.resolvedUrl(relativePath).toString()
-    if (url.indexOf("file://") === 0) url = url.substring(7)
-    return decodeURIComponent(url)
-  }
-
+  // Sound is played on the HOST through the `pw-play` exec grant: inside the
+  // sandbox there is no reachable PipeWire, so we hand the host an absolute
+  // path to our own staged assets via `OMARCHY_PLUGIN_PATH` and a volume, and
+  // the reviewed exec tree admits that exact argv. If no host path is staged
+  // (grant not admitted) we stay silent rather than fail.
   function playSound(event) {
     if (soundVolume <= 0) return
     var file = eventSounds[event]
     if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
     if (!file) return
-    Quickshell.execDetached(["pw-play", "--volume", soundVolume.toFixed(2),
-      soundPath("sounds/" + file)])
+    var hostRoot = Quickshell.env("OMARCHY_PLUGIN_PATH")
+    if (!hostRoot) return
+    Quickshell.execDetached(["/bootstrap", "--exec", "pw-play",
+      "--volume", soundVolume.toFixed(2), hostRoot + "/sounds/" + file])
   }
 
   function notify(title, body) {
-    Quickshell.execDetached([
-      notificationExecutable,
-      "--app-name", "omagotchi",
-      "-u", "normal",
-      title,
-      body
-    ])
+    Quickshell.execDetached(["/bootstrap", "--notify", title, body])
   }
 
   // --- actions ---------------------------------------------------------------
