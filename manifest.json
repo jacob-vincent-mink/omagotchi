@@ -26,6 +26,7 @@
     "requests": {
       "notifications": true,
       "storage": true,
+      "desktopGeometry": true,
       "exec": {
         "checkupdates": {
           "executable": "/usr/bin/checkupdates",

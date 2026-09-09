@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Ward
 
 // Headless pet brain. Loaded once at shell startup, independent of the bar
 // widget, so the pet keeps living (and roaming) with the panel closed.
@@ -98,7 +99,11 @@ Item {
   readonly property real happiness: Math.round(100 - worstNeed)
 
   readonly property real careAverage: careCount > 0 ? careSum / careCount : 100
-  readonly property bool canRoam: stage !== "egg" && stage !== "baby"
+  readonly property bool canRoam: stage !== "egg" && stage !== "baby" && Desktop.available
+  readonly property string roamUnavailableReason: stage === "egg" || stage === "baby"
+    ? "Too young to go out alone" : !Desktop.granted
+      ? "Allow desktop geometry in the plugin review to go roaming"
+      : "Desktop geometry is temporarily unavailable"
   readonly property string stageLabel: ({
     egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult"
   })[stage] || stage
@@ -457,6 +462,7 @@ Item {
   }
 
   function setRoamEnabled(value) {
+    if (value === true && !canRoam) return
     updateSettings({ roamEnabled: value === true })
     // Brought home already sleepy? It settles in for a moment, then dozes
     // off — no need to hit rock bottom first.

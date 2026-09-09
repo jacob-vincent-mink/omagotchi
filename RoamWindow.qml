@@ -3,17 +3,15 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import qs.Commons
+import qs.Ward
 
 // The pet's playground: a transparent full-screen overlay where it wanders the
 // bottom edge, climbs up the sides of windows whose top border leaves enough
 // headroom, walks along their tops, and hops back down. Everything is
 // click-through except the pet itself (mask), so the desktop stays usable.
 //
-// Window geometry comes from the Hyprland IPC via Quickshell — no shell
-// commands. Coordinates are used as-is, which is correct at monitor scale 1;
-// fractional scaling support is a known TODO.
+// Ward's read-only Desktop adapter supplies the familiar geometry fields.
 PanelWindow {
   id: root
 
@@ -52,7 +50,7 @@ PanelWindow {
   // Headroom above a platform so the pet never pokes off-screen.
   readonly property int headroom: spriteSize + 12
 
-  readonly property var hyprMonitor: Hyprland.monitorFor(root.screen)
+  readonly property var hyprMonitor: Desktop.monitorFor(root.screen)
 
   // The bar's reserved strip, so the floor sits above a bottom bar.
   readonly property real floorY: {
@@ -74,7 +72,7 @@ PanelWindow {
     if (!hyprMonitor) { platforms = []; validateSupport(); return }
     var ws = hyprMonitor.activeWorkspace ? hyprMonitor.activeWorkspace.id : -1
     var list = []
-    var toplevels = Hyprland.toplevels.values
+    var toplevels = Desktop.toplevels.values
     for (var i = 0; i < toplevels.length; i++) {
       var toplevel = toplevels[i]
       var ipc = toplevel.lastIpcObject
@@ -386,48 +384,13 @@ PanelWindow {
     }
   }
 
-  // --- keeping up with the compositor ---------------------------------------
+  // --- keeping up with the host's read-only observations --------------------
 
   Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      switch (event.name) {
-      case "openwindow":
-      case "closewindow":
-      case "movewindow":
-      case "movewindowv2":
-      case "resizewindow":
-      case "workspace":
-      case "workspacev2":
-      case "changefloatingmode":
-      case "fullscreen":
-      case "focusedmon":
-        refreshDebounce.restart()
-      }
-    }
+    target: Desktop
+    function onChanged() { root.rebuildPlatforms() }
   }
-
-  Timer {
-    id: refreshDebounce
-    interval: 250
-    onTriggered: {
-      Hyprland.refreshToplevels()
-      rebuildDelay.restart()
-    }
-  }
-  // lastIpcObject updates arrive shortly after the refresh request.
-  Timer {
-    id: rebuildDelay
-    interval: 350
-    onTriggered: root.rebuildPlatforms()
-  }
-  // Fallback sweep for anything the event filter misses.
-  Timer {
-    interval: 7000
-    running: root.visible
-    repeat: true
-    onTriggered: refreshDebounce.restart()
-  }
+  onWidthChanged: rebuildPlatforms()
 
   function resetPosition() {
     support = null
@@ -455,7 +418,7 @@ PanelWindow {
       svc.handoffY = -1
       svc.handoffScreen = ""
     }
-    refreshDebounce.restart()
+    rebuildPlatforms()
   }
 
   // The window can be born visible, so onVisibleChanged alone never fires;
@@ -464,6 +427,7 @@ PanelWindow {
   Component.onCompleted: resetPosition()
   onVisibleChanged: { if (visible) resetPosition(); else leavingPhase = 0 }
   onFloorYChanged: {
+    rebuildPlatforms()
     if (action === "idle" && !support && Math.abs(petY - floorY) > 1)
       petY = floorY
   }
