@@ -4,7 +4,7 @@ This review branch targets `jacob-vincent-mink/omagotchi:master`, not the origin
 
 ## Changes to the plugin
 
-The manifest requests optional notifications, private persistent storage, and three independently selected exec grants. `pw-play` admits only `--volume`, a bounded volume, and one of the exact sixteen shipped sound filenames under `$OMARCHY_PLUGIN_PATH/sounds/`. `checkupdates:pending-updates` admits no arguments; `pacman:orphan-packages` admits exactly `-Qdtq`. Download/install/remove flags and trailing arguments are not admitted. The checker refreshes its temporary package database; it does not install updates.
+The manifest requests optional notifications, private persistent storage, read-only desktop geometry, and three independently selected exec grants. `pw-play` admits only `--volume`, a bounded volume, and one of the exact sixteen shipped sound filenames under `$OMARCHY_PLUGIN_PATH/sounds/`. `checkupdates:pending-updates` admits no arguments; `pacman:orphan-packages` admits exactly `-Qdtq`. Download/install/remove flags and trailing arguments are not admitted. The checker refreshes its temporary package database; it does not install updates.
 
 The host-facing calls change in `Service.qml`:
 
@@ -12,7 +12,7 @@ The host-facing calls change in `Service.qml`:
 - `notify()` sends `/bootstrap --notify <title> <body>`. Notification permission and identity belong to the host broker; the worker does not invoke an unprovided desktop helper.
 - The two package probes explicitly call `/bootstrap --exec`. Counts start unknown (`-1`); declined or failed queries retain the previous observation rather than inventing an empty list. The panel labels an unavailable initial observation. A silent `pacman` exit 1 still means no matching orphans; an error with stderr does not.
 
-No PATH shim, replacement service, or plugin-specific host adapter is added. The original needs model, save/load code, sprites, panel and bar widget remain unchanged.
+No PATH shim, replacement service, or plugin-specific host adapter is added. Roaming imports the explicit shared `qs.Ward.Desktop` adapter, which checks the admitted geometry permission itself and publishes only detached output/workspace/window rectangles and opaque identities. The service and panel explain unavailable observations and disable departure when geometry is absent. No compositor socket, titles, raw addresses or window-control methods are exposed. The original needs model, evolution, save/load, sprites, care handlers and roaming physics remain in place.
 
 ## Paths and permissions
 
@@ -30,6 +30,12 @@ The earlier `checkupdates` failure is resolved by Ward's generic host-job change
 
 Sound was checked separately at volume 0.25 with fresh synthetic data. The original Feed action invoked the installed `pw-play` against the immutable staged `eat.wav`; a private PipeWire server, with no hardware modules or session manager, captured nonzero audio. With sound declined, the same Feed action completed and saved but created no playback stream and the capture remained silent. Both panel captures were inspected. The worker receives no PipeWire socket. This exposed a generic executable-alias bug in Ward: the runtime now preserves the requested invocation name while pinning and checking the resolved executable bytes, so installed symlink aliases work without a plugin-specific exception. This verifies one event's audio path, not every sound, real-speaker output, notifications triggered by this port or full care/evolution behavior.
 
-Roaming still needs detached monitor/window geometry and correct host placement. Real bar-slot placement and full desktop acceptance remain unfinished. This is a draft integration port, not a feature-parity claim.
+The installed live bar now hosts a fresh, muted child test pet. Feed, affection, persistence across shell restarts, departure/beam-down, walking and return home were exercised without loading or replacing an existing pet save. Full live scrubbing and reliable pickup/drop still need their final desktop checks.
+
+An external private-display trial with the admitted geometry adapter passed original platform climbing, riding a moved window, falling after removal, click-to-pet, pickup/drag/drop, high-fall stun and recovery, tired roaming nap/wake and return home. It waits for the rendered landed sprite before clicking; reading the model alone was too early for the matching frame and input mask. Held, stunned and sleeping render states were inspected. No production change was needed for these interactions.
+
+A separate private trial scrubbed dirt from 40 to zero through the actual pointer handler and verified persistence. It seeded disposable age/care values immediately below and at growth boundaries, exercised both teen paths and all three adults through the original evolution function, and inspected their rendered sprites and decor. The original farewell button and confirmation sent the gremlin adult out, through its corner goodbye and off-screen walk, producing a saved generation-four egg with roaming disabled. These bounded trials do not simulate days of heartbeat timing, exercise every farewell sound variant or verify notification delivery. They used muted disposable state; the concrete experiments remain outside both repositories.
+
+All sound events, notification delivery and the remaining live desktop checks still prevent a full feature-parity claim. Gesture-gated Tab/Backtab panel switching has passed Ward's synthetic integration test, but its latest runtime build is not yet deployed on the live desktop.
 
 Run `node tests/probes.test.mjs` for focused regression checks of the actual QML handler bodies, fixed manifest requests, unknown/empty results and retained failure state. The native parser also accepted the port manifest. These checks do not replace actual broker/worker or visual testing.
