@@ -338,20 +338,16 @@ Item {
     farewell_gremlin: "farewell_gremlin.mp3"
   })
 
-  // Sound is played on the HOST through the `pw-play` exec grant: inside the
-  // sandbox there is no reachable PipeWire, so we hand the host an absolute
-  // path to our own staged assets via `OMARCHY_PLUGIN_PATH` and a volume, and
-  // the reviewed exec tree admits that exact argv. If no host path is staged
-  // (grant not admitted) we stay silent rather than fail.
+  // Decode bundled sounds inside the worker. Only PCM samples cross Ward's
+  // playback grant; no host asset paths or host executable approval are needed.
   function playSound(event) {
     if (soundVolume <= 0) return
     var file = eventSounds[event]
     if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
     if (!file) return
-    var hostRoot = Quickshell.env("OMARCHY_PLUGIN_PATH")
-    if (!hostRoot) return
-    Quickshell.execDetached(["/bootstrap", "--exec", "pw-play",
-      "--volume", soundVolume.toFixed(2), hostRoot + "/sounds/" + file])
+    Quickshell.execDetached(["omarchy-ward-play",
+      Qt.resolvedUrl("sounds/" + file).toString().replace(/^file:\/\//, ""),
+      soundVolume.toFixed(2)])
   }
 
   function notify(title, body) {

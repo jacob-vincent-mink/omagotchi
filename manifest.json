@@ -30,61 +30,28 @@
       "exec": {
         "checkupdates": {
           "executable": "/usr/bin/checkupdates",
-          "tree": { "end": "pending-updates" }
+          "tree": {
+            "end": "pending-updates"
+          }
         },
         "pacman": {
           "executable": "/usr/bin/pacman",
           "tree": {
-            "next": [{
-              "arg": { "kind": "exact", "value": "-Qdtq" },
-              "then": { "end": "orphan-packages" }
-            }]
-          }
-        },
-        "pw-play": {
-          "executable": "/usr/bin/pw-play",
-          "tree": {
             "next": [
               {
-                "arg": { "kind": "exact", "value": "--volume" },
+                "arg": {
+                  "kind": "exact",
+                  "value": "-Qdtq"
+                },
                 "then": {
-                  "next": [
-                    {
-                      "arg": { "kind": "pattern", "value": "(?:0\\.[0-9]{1,2}|1\\.00)", "max": 20 },
-                      "then": {
-                        "next": [
-                          {
-                            "arg": { "kind": "oneOf", "values": [
-                              "$OMARCHY_PLUGIN_PATH/sounds/balloon.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/eat.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/evolve.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/fall.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_ace.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_gremlin.mp3",
-                              "$OMARCHY_PLUGIN_PATH/sounds/farewell_ok.mp3",
-                              "$OMARCHY_PLUGIN_PATH/sounds/hatch.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/humming.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/pet.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/pet2.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/sleep.mp3",
-                              "$OMARCHY_PLUGIN_PATH/sounds/stun.mp3",
-                              "$OMARCHY_PLUGIN_PATH/sounds/subbass.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/tractorbeam.wav",
-                              "$OMARCHY_PLUGIN_PATH/sounds/wash.wav"
-                            ] },
-                            "then": { "end": "play" }
-                          }
-                        ]
-                      }
-                    }
-                  ]
+                  "end": "orphan-packages"
                 }
               }
             ]
-          },
-          "required": []
+          }
         }
-      }
+      },
+      "audioPlayback": true
     }
   }
 }

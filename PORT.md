@@ -4,11 +4,11 @@ This review branch targets `jacob-vincent-mink/omagotchi:master`, not the origin
 
 ## Changes to the plugin
 
-The manifest requests optional notifications, private persistent storage, read-only desktop geometry, and three independently selected exec grants. `pw-play` admits only `--volume`, a bounded volume, and one of the exact sixteen shipped sound filenames under `$OMARCHY_PLUGIN_PATH/sounds/`. `checkupdates:pending-updates` admits no arguments; `pacman:orphan-packages` admits exactly `-Qdtq`. Download/install/remove flags and trailing arguments are not admitted. The checker refreshes its temporary package database; it does not install updates.
+The manifest requests optional notifications, private persistent storage, read-only desktop geometry, audio playback, and two independently selected package-query exec grants. `audioPlayback` permits playback only: no microphone, system-output recording or direct PipeWire access. `checkupdates:pending-updates` admits no arguments; `pacman:orphan-packages` admits exactly `-Qdtq`. Download/install/remove flags and trailing arguments are not admitted. The checker refreshes its temporary package database; it does not install updates.
 
 The host-facing calls change in `Service.qml`:
 
-- `playSound()` sends `/bootstrap --exec pw-play --volume <volume> <assets>/sounds/<file>`. The worker has no PipeWire socket; the broker checks the selected exec tree and runs the admitted host command in a supervised job.
+- `playSound()` calls the shared `omarchy-ward-play <local-file> <volume>` helper. FFmpeg decodes the bundled WAV/MP3 inside the sandbox and applies volume; only S16LE/48 kHz/stereo PCM crosses Ward's playback endpoint. Sound no longer needs a staged host asset path, a host-exec leaf or a per-file permission list. This requires the updated Ward native runtime and separately staged Omarchy adapter.
 - `notify()` sends `/bootstrap --notify <title> <body>`. Notification permission and identity belong to the host broker; the worker does not invoke an unprovided desktop helper.
 - The two package probes explicitly call `/bootstrap --exec`. Counts start unknown (`-1`); declined or failed queries retain the previous observation rather than inventing an empty list. The panel labels an unavailable initial observation. A silent `pacman` exit 1 still means no matching orphans; an error with stderr does not.
 
@@ -18,9 +18,13 @@ No PATH shim, replacement service, or plugin-specific host adapter is added. Roa
 
 `OMARCHY_PLUGIN_PATH` is the host-real path to the worker's staged read-only assets, available when an exec grant is admitted. `OMARCHY_PLUGIN_DATA` is the host-real path to its persistent per-identity directory, available only with storage access. Both can be used as tokens in manifest exec trees; the broker resolves them and rejects traversal. The storage directory is mounted at the worker's private home, so the existing save/load paths need no source changes. These host path strings do not mount the rest of the host filesystem into the worker.
 
-The manifest requests capabilities; it does not approve them. The user must select the relevant grants. With no admitted exec grant, no asset path is provided and sound is skipped. A rejected sound leaf is denied at the broker. Revoking storage removes access but retains saved data; subsequent ungranted workers receive an ephemeral home.
+The manifest requests capabilities; it does not approve them. Select `--allow-audio-playback` when approving the exact reviewed revision to allow sounds. Neither capture permission is requested or needed. Declined playback has no reachable playback endpoint and the helper fails without a host stream. Ward permits two concurrent playback streams per plugin, with bounded buffering; stopping or revoking the plugin terminates its streams. Revoking storage removes access but retains saved data; subsequent ungranted workers receive an ephemeral home. Package-query exec grants and notifications remain independent of playback.
 
 ## Verification and remaining work
+
+The updated PCM path passed a fresh private-display trial with the matching native runtime and staged adapter. The original `playSound("pet")` decoded its bundled asset at volume 0.5 and delivered nonzero samples to a private synthetic PipeWire output, with no host-exec grant. Two bar placements shared the one service; removing one left the other active. With playback declined, the same sound attempt created no audio backend and the synthetic output stayed silent. Revocation removed every tracked process in the denied trial. The rendered egg panel was inspected. No real speakers or microphone were used.
+
+The older audio observations below describe the former host-exec version; they are not a new all-assets matrix for PCM playback. The unrelated care, persistence and roaming evidence remains applicable to those unchanged paths.
 
 The runtime's maintained storage test verifies real worker/controller restarts, atomic save replacement, an ungranted ephemeral home, and access to the original saved data after regranting. Exec tests verify tree matching, path resolution, denied arguments, job bounds and revocation. These are runtime tests, not proof of the complete pet experience.
 
