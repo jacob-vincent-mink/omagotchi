@@ -42,7 +42,8 @@ Panel {
 
   readonly property var needs: ready ? [
     { label: "Hunger", value: petService.hunger,
-      hint: petService.pendingUpdates > 0
+      hint: petService.pendingUpdates < 0 ? "update status unavailable"
+        : petService.pendingUpdates > 0
         ? "rising faster: " + petService.pendingUpdates + " updates pending"
         : "rises over time",
       action: "feed", actionLabel: "Feed", needsHome: true,
@@ -52,6 +53,7 @@ Panel {
         : "A good meal, hunger back to zero" },
     { label: "Hygiene", value: petService.dirtiness,
       hint: petIsOut ? "wash it at home: press and scrub it with your mouse"
+        : petService.orphanCount < 0 ? "package status unavailable · scrub to wash"
         : "press and scrub it with your mouse to wash it",
       action: "", actionLabel: "", actionTip: "" },
     { label: "Energy", value: petService.tiredness,

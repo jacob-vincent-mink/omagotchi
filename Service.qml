@@ -10,7 +10,7 @@ import Quickshell.Io
 // pace — pending updates make it hungrier faster, orphaned packages make it
 // get dirty faster. Nothing here depends on absolute machine performance.
 //
-// Commands executed (all fixed argv, read-only, no interpolation):
+// Host queries (fixed argv, no package installation or removal):
 //   checkupdates              pending official updates
 //   pacman -Qdtq              orphaned packages
 Item {
@@ -64,8 +64,9 @@ Item {
 
   // --- probe results ---------------------------------------------------------
 
-  property int pendingUpdates: 0
-  property int orphanCount: 0
+  // Unknown until a host query succeeds; denial/offline is not an empty list.
+  property int pendingUpdates: -1
+  property int orphanCount: -1
   property double nowMs: Date.now()
 
   property bool initialized: false
@@ -607,14 +608,17 @@ Item {
 
   Process {
     id: updatesProc
-    command: ["checkupdates"]
+    command: ["/bootstrap", "--exec", "checkupdates"]
     stdout: StdioCollector { id: updatesOut }
+    stderr: StdioCollector { id: updatesErr }
     onExited: function(exitCode) {
       if (exitCode === 0) {
         var text = updatesOut.text.trim()
         root.pendingUpdates = text === "" ? 0 : text.split("\n").length
       } else if (exitCode === 2) {
         root.pendingUpdates = 0
+      } else {
+        console.warn("Omagotchi update query failed (" + exitCode + "): " + updatesErr.text.slice(0, 512))
       }
       // exit 1 = error (offline, db lock): keep the previous value.
     }
@@ -622,13 +626,16 @@ Item {
 
   Process {
     id: orphansProc
-    command: ["pacman", "-Qdtq"]
+    command: ["/bootstrap", "--exec", "pacman", "-Qdtq"]
     stdout: StdioCollector { id: orphansOut }
+    stderr: StdioCollector { id: orphansErr }
     onExited: function(exitCode) {
       if (exitCode === 0) {
         var text = orphansOut.text.trim()
         root.orphanCount = text === "" ? 0 : text.split("\n").length
-      } else {
+      } else if (exitCode === 1 && orphansOut.text.trim() === "" && orphansErr.text.trim() === "") {
+        // pacman returns 1 with no output when no packages match. A broker
+        // denial or query error has stderr: retain the previous observation.
         root.orphanCount = 0
       }
     }
