@@ -23,8 +23,8 @@ function handler(id) {
 
 assert.match(service, /property int pendingUpdates: -1/);
 assert.match(service, /property int orphanCount: -1/);
-assert.match(service, /command: \["\/bootstrap", "--exec", "checkupdates"\]/);
-assert.match(service, /command: \["\/bootstrap", "--exec", "pacman", "-Qdtq"\]/);
+assert.match(service, /command: \["checkupdates"\]/);
+assert.match(service, /command: \["pacman", "-Qdtq"\]/);
 assert.deepEqual(manifest.sandbox.requests.exec.checkupdates, {
   executable: "/usr/bin/checkupdates", tree: { end: "pending-updates" }
 });

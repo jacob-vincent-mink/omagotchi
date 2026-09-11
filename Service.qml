@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Ward
+import qs.Plugin as Plugin
 
 // Headless pet brain. Loaded once at shell startup, independent of the bar
 // widget, so the pet keeps living (and roaming) with the panel closed.
@@ -19,9 +20,9 @@ Item {
 
   property var shell: null
   property var manifest: null
+  readonly property var runtime: shell?.runtime || null
 
-  readonly property string stateHome: Quickshell.env("XDG_STATE_HOME")
-    || ((Quickshell.env("HOME") || "") + "/.local/state")
+  readonly property string stateHome: runtime?.statePath || ""
   readonly property string stateDir: stateHome + "/omarchy"
   readonly property string settingsPath: stateDir + "/omagotchi-settings.json"
   readonly property string petPath: stateDir + "/omagotchi-state.json"
@@ -345,13 +346,13 @@ Item {
     var file = eventSounds[event]
     if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
     if (!file) return
-    Quickshell.execDetached(["omarchy-ward-play",
+    runtime.start(root, ["omarchy-plugin-play",
       Qt.resolvedUrl("sounds/" + file).toString().replace(/^file:\/\//, ""),
       soundVolume.toFixed(2)])
   }
 
   function notify(title, body) {
-    Quickshell.execDetached(["/bootstrap", "--notify", title, body])
+    runtime.start(root, ["omarchy-plugin-request", "--notify", title, body])
   }
 
   // --- actions ---------------------------------------------------------------
@@ -608,9 +609,10 @@ Item {
 
   // --- probes ----------------------------------------------------------------
 
-  Process {
+  Plugin.Process {
     id: updatesProc
-    command: ["/bootstrap", "--exec", "checkupdates"]
+    runtime: root.runtime
+    command: ["checkupdates"]
     stdout: StdioCollector { id: updatesOut }
     stderr: StdioCollector { id: updatesErr }
     onExited: function(exitCode) {
@@ -626,9 +628,10 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: orphansProc
-    command: ["/bootstrap", "--exec", "pacman", "-Qdtq"]
+    runtime: root.runtime
+    command: ["pacman", "-Qdtq"]
     stdout: StdioCollector { id: orphansOut }
     stderr: StdioCollector { id: orphansErr }
     onExited: function(exitCode) {
@@ -693,8 +696,9 @@ Item {
     return text.length >= maxStateBytes ? "" : text
   }
 
-  Process {
+  Plugin.Process {
     id: settingsReader
+    runtime: root.runtime
     command: ["head", "-c", String(root.maxStateBytes), root.settingsPath]
     running: true
     stdout: StdioCollector { id: settingsOut }
@@ -705,8 +709,9 @@ Item {
     }
   }
 
-  Process {
+  Plugin.Process {
     id: petReader
+    runtime: root.runtime
     command: ["head", "-c", String(root.maxStateBytes), root.petPath]
     running: true
     stdout: StdioCollector { id: petOut }
