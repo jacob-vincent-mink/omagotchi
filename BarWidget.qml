@@ -6,6 +6,7 @@ import qs.Ui
 // middle click is a quick pet on the head.
 BarWidget {
   id: root
+  required property var runtime
   moduleName: "slcode777.omagotchi"
 
   readonly property var petService: bar && bar.shell

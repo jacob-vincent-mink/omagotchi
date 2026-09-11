@@ -6,7 +6,10 @@
   "author": "SLcode777",
   "license": "MIT",
   "description": "A 1-bit desktop pet in your bar, in the spirit of the 1997 originals: feed it, scrub it clean, cuddle it, and let it out to roam your screen and climb your windows. It hatches, grows, and evolves with the care you give.",
-  "kinds": ["service", "bar-widget"],
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
   "entryPoints": {
     "service": "Service.qml",
     "barWidget": "BarWidget.qml"
@@ -17,5 +20,38 @@
     "category": "Fun",
     "allowMultiple": false,
     "defaultSection": "right"
+  },
+  "sandbox": {
+    "version": 1,
+    "requests": {
+      "notifications": true,
+      "storage": { "required": true },
+      "desktopGeometry": true,
+      "exec": {
+        "checkupdates": {
+          "executable": "/usr/bin/checkupdates",
+          "tree": {
+            "end": "pending-updates"
+          }
+        },
+        "pacman": {
+          "executable": "/usr/bin/pacman",
+          "tree": {
+            "next": [
+              {
+                "arg": {
+                  "kind": "exact",
+                  "value": "-Qdtq"
+                },
+                "then": {
+                  "end": "orphan-packages"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "audioPlayback": true
+    }
   }
 }

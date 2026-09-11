@@ -42,7 +42,8 @@ Panel {
 
   readonly property var needs: ready ? [
     { label: "Hunger", value: petService.hunger,
-      hint: petService.pendingUpdates > 0
+      hint: petService.pendingUpdates < 0 ? "update status unavailable"
+        : petService.pendingUpdates > 0
         ? "rising faster: " + petService.pendingUpdates + " updates pending"
         : "rises over time",
       action: "feed", actionLabel: "Feed", needsHome: true,
@@ -52,6 +53,7 @@ Panel {
         : "A good meal, hunger back to zero" },
     { label: "Hygiene", value: petService.dirtiness,
       hint: petIsOut ? "wash it at home: press and scrub it with your mouse"
+        : petService.orphanCount < 0 ? "package status unavailable · scrub to wash"
         : "press and scrub it with your mouse to wash it",
       action: "", actionLabel: "", actionTip: "" },
     { label: "Energy", value: petService.tiredness,
@@ -59,10 +61,10 @@ Panel {
       action: "", actionLabel: "", actionTip: "" },
     { label: "Fun", value: petService.boredom, hint: "roaming cures boredom",
       action: "roam",
-      actionLabel: petService.settings.roamEnabled === true ? "Come home" : "Go play",
+      actionLabel: petService.roaming ? "Come home" : "Go play",
       actionTip: petService.canRoam
         ? "Let the pet roam and climb your windows"
-        : "Too young to go out alone" },
+        : petService.roamUnavailableReason },
     { label: "Affection", value: petService.loneliness, hint: "click the pet!",
       action: "", actionLabel: "", actionTip: "" }
   ] : []
@@ -79,7 +81,7 @@ Panel {
     if (!ready) return
     if (kind === "feed") petService.feedNow()
     else if (kind === "roam") {
-      if (petService.settings.roamEnabled === true) beginReturn()
+      if (petService.roaming) beginReturn()
       else beginExit()
     }
   }
@@ -111,7 +113,7 @@ Panel {
   }
 
   function beginExit() {
-    if (exiting || !ready) return
+    if (exiting || !ready || !petService.canRoam) return
     petService.wakeUp()
     exiting = true
     petService.playBeamSound()
