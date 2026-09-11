@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Ward
-import qs.Plugin as Plugin
 
 // Headless pet brain. Loaded once at shell startup, independent of the bar
 // widget, so the pet keeps living (and roaming) with the panel closed.
@@ -20,9 +19,9 @@ Item {
 
   property var shell: null
   property var manifest: null
-  readonly property var runtime: shell?.runtime || null
+  required property var runtime
 
-  readonly property string stateHome: runtime?.statePath || ""
+  readonly property string stateHome: runtime.statePath
   readonly property string stateDir: stateHome + "/omarchy"
   readonly property string settingsPath: stateDir + "/omagotchi-settings.json"
   readonly property string petPath: stateDir + "/omagotchi-state.json"
@@ -346,13 +345,11 @@ Item {
     var file = eventSounds[event]
     if (Array.isArray(file)) file = file[Math.floor(Math.random() * file.length)]
     if (!file) return
-    runtime.start(root, ["omarchy-plugin-play",
-      Qt.resolvedUrl("sounds/" + file).toString().replace(/^file:\/\//, ""),
-      soundVolume.toFixed(2)])
+    runtime.play(Qt.resolvedUrl("sounds/" + file).toString().replace(/^file:\/\//, ""), soundVolume.toFixed(2))
   }
 
   function notify(title, body) {
-    runtime.start(root, ["omarchy-plugin-request", "--notify", title, body])
+    runtime.notify(title, body)
   }
 
   // --- actions ---------------------------------------------------------------
@@ -596,8 +593,8 @@ Item {
     }
     if (hatch) flushPet()
 
-    updatesProc.running = true
-    orphansProc.running = true
+    queryUpdates()
+    queryOrphans()
   }
 
   function updateSettingsInMemory(parsed) {
@@ -609,41 +606,34 @@ Item {
 
   // --- probes ----------------------------------------------------------------
 
-  Plugin.Process {
-    id: updatesProc
-    runtime: root.runtime
-    command: ["checkupdates"]
-    stdout: StdioCollector { id: updatesOut }
-    stderr: StdioCollector { id: updatesErr }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
-        var text = updatesOut.text.trim()
-        root.pendingUpdates = text === "" ? 0 : text.split("\n").length
-      } else if (exitCode === 2) {
-        root.pendingUpdates = 0
-      } else {
-        console.warn("Omagotchi update query failed (" + exitCode + "): " + updatesErr.text.slice(0, 512))
-      }
-      // exit 1 = error (offline, db lock): keep the previous value.
-    }
+  property var updatesJob: null
+  property var orphansJob: null
+
+  function queryUpdates() {
+    if (updatesJob) return
+    updatesJob = runtime.exec("checkupdates", [], {onFinished: result => {
+      updatesJob = null
+      if (result.status !== "completed" || typeof result.stdout !== "string" || typeof result.stderr !== "string") return
+      if (result.exitCode === 0) {
+        var text = result.stdout.trim()
+        pendingUpdates = text === "" ? 0 : text.split("\n").length
+      } else if (result.exitCode === 2) pendingUpdates = 0
+      else console.warn("Omagotchi update query failed: " + result.stderr.slice(0, 512))
+    }})
   }
 
-  Plugin.Process {
-    id: orphansProc
-    runtime: root.runtime
-    command: ["pacman", "-Qdtq"]
-    stdout: StdioCollector { id: orphansOut }
-    stderr: StdioCollector { id: orphansErr }
-    onExited: function(exitCode) {
-      if (exitCode === 0) {
-        var text = orphansOut.text.trim()
-        root.orphanCount = text === "" ? 0 : text.split("\n").length
-      } else if (exitCode === 1 && orphansOut.text.trim() === "" && orphansErr.text.trim() === "") {
-        // pacman returns 1 with no output when no packages match. A broker
-        // denial or query error has stderr: retain the previous observation.
-        root.orphanCount = 0
+  function queryOrphans() {
+    if (orphansJob) return
+    orphansJob = runtime.exec("pacman", ["-Qdtq"], {onFinished: result => {
+      orphansJob = null
+      if (result.status !== "completed" || typeof result.stdout !== "string" || typeof result.stderr !== "string") return
+      if (result.exitCode === 0) {
+        var text = result.stdout.trim()
+        orphanCount = text === "" ? 0 : text.split("\n").length
+      } else if (result.exitCode === 1 && result.stdout.trim() === "" && result.stderr.trim() === "") {
+        orphanCount = 0
       }
-    }
+    }})
   }
 
   // The heartbeat: needs, age, care sampling and evolution, every minute.
@@ -667,13 +657,13 @@ Item {
     interval: 30 * 60 * 1000
     running: root.initialized
     repeat: true
-    onTriggered: orphansProc.running = true
+    onTriggered: queryOrphans()
   }
   Timer {
     interval: 30 * 60 * 1000
     running: root.initialized
     repeat: true
-    onTriggered: updatesProc.running = true
+    onTriggered: queryUpdates()
   }
 
   // --- roaming ---------------------------------------------------------------
@@ -690,38 +680,24 @@ Item {
 
   // Bounded reads: at most maxStateBytes per file, once at startup. A file
   // that fills the cap (or can't be read) counts as empty → defaults.
-  function boundedText(collector, exitCode) {
-    if (exitCode !== 0) return ""
-    var text = collector.text
-    return text.length >= maxStateBytes ? "" : text
+  function boundedText(result) {
+    if (result.status !== "completed" || result.exitCode !== 0) return ""
+    return result.stdout.length >= maxStateBytes ? "" : result.stdout
   }
 
-  Plugin.Process {
-    id: settingsReader
-    runtime: root.runtime
-    command: ["head", "-c", String(root.maxStateBytes), root.settingsPath]
-    running: true
-    stdout: StdioCollector { id: settingsOut }
-    onExited: function(exitCode) {
-      root.loadedSettingsText = root.boundedText(settingsOut, exitCode)
-      root.settingsFileLoaded = true
-      root.initializeIfReady()
-    }
-  }
-
-  Plugin.Process {
-    id: petReader
-    runtime: root.runtime
-    command: ["head", "-c", String(root.maxStateBytes), root.petPath]
-    running: true
-    stdout: StdioCollector { id: petOut }
-    onExited: function(exitCode) {
-      root.loadedPetText = root.boundedText(petOut, exitCode)
-      if (exitCode === 0 && petOut.text.length >= root.maxStateBytes)
-        root.petReadProblem = "exceeds " + root.maxStateBytes + " bytes"
-      root.petFileLoaded = true
-      root.initializeIfReady()
-    }
+  Component.onCompleted: {
+    runtime.runLocal(["head", "-c", String(maxStateBytes), settingsPath], {onFinished: result => {
+      loadedSettingsText = boundedText(result)
+      settingsFileLoaded = true
+      initializeIfReady()
+    }})
+    runtime.runLocal(["head", "-c", String(maxStateBytes), petPath], {onFinished: result => {
+      loadedPetText = boundedText(result)
+      if (result.exitCode === 0 && result.stdout.length >= maxStateBytes)
+        petReadProblem = "exceeds " + maxStateBytes + " bytes"
+      petFileLoaded = true
+      initializeIfReady()
+    }})
   }
 
   // Write-only views: preload off, text() is never called, so the shell

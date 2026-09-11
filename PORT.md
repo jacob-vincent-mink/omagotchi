@@ -8,27 +8,29 @@ The manifest requires private persistent storage so the pet's care, age and gene
 
 The host-facing calls change in `Service.qml`:
 
-- `playSound()` uses owner-bound `runtime.start()` and `omarchy-plugin-play <local-file> <volume>`. FFmpeg decodes the bundled asset locally; Ward transfers only S16LE/48 kHz/stereo PCM to its admitted endpoint, while YOLO uses ordinary host audio. No staged host asset or per-file exec grant is needed.
-- `notify()` uses the same owned helper route with `omarchy-plugin-request --notify <title> <body>`. Ward permission and identity still belong to the broker.
-- The two package probes use `qs.Plugin.Process` with their original `checkupdates` and `pacman -Qdtq` argv. Omarchy's generic declared-command adapters select the named resources. Counts start unknown (`-1`); declined or failed queries retain the previous observation. A silent `pacman` exit 1 still means no matching orphans; stderr errors do not.
+- `playSound()` uses `runtime.play(localFile, volume)`. FFmpeg decodes the bundled asset locally and Ward transfers only S16LE/48 kHz/stereo PCM to its admitted endpoint in both modes. No staged host asset or per-file exec grant is needed.
+- `notify()` uses `runtime.notify(title, body)`. Permission and identity still belong to the broker.
+- The two package probes use `runtime.exec("checkupdates", [])` and `runtime.exec("pacman", ["-Qdtq"])`, naming the manifest resources explicitly. Structured callbacks distinguish command completion from denial or failure. Counts start unknown (`-1`); declined or failed queries retain the previous observation. A silent `pacman` exit 1 still means no matching orphans; stderr errors do not.
 
-No plugin-owned PATH shim, replacement service or host adapter is added. Roaming imports shared `qs.Ward.Desktop`, backed by Ward's admitted observations or the host's one detached geometry observer in YOLO. The service and panel explain unavailable observations and disable departure when geometry is absent. The API exposes no compositor socket, titles, raw addresses or window-control methods. The original needs model, evolution, save/load, sprites, care handlers and roaming physics remain in place.
+No plugin-owned PATH shim, replacement service or host adapter is added. Roaming imports shared `qs.Ward.Desktop`, backed by Ward's admitted observations in both modes. The service and panel explain unavailable observations and disable departure when geometry is absent. The API exposes no compositor socket, titles, raw addresses or window-control methods. The original needs model, evolution, save/load, sprites, care handlers and roaming physics remain in place.
 
 ## Portable runtime
 
-The same revision now runs in Ward or an explicitly trusted YOLO installation. Both use private paths from `shell.runtime`; process wrappers defer startup until runtime injection. YOLO remains arbitrary same-account code and does not enforce Ward permissions. The host-owned installation record chooses mode, not the manifest.
+The service and bar entry declare `required property var runtime`, initialized before component completion. Normal mode and explicit YOLO both run this sandbox-native plugin in Ward and use its private paths and broker. YOLO approves every declared supported permission, including both package-query leaves, but does not admit extra command arguments. Host-owned installation provenance chooses the execution class, not the manifest.
 
-Production-code churn relative to the original `master` rises from 122 to 135 changed lines in the previous Ward-only port comparison (additions plus deletions; manifest, docs and tests excluded). The extra process/runtime plumbing removes worker-only calls and supports both modes. Unlike the other three winner ports, this individual port is slightly larger.
+The matching host API is still unpublished. This branch requires the current local required-runtime implementation in addition to the linked Omarchy PR.
 
-A fresh external private-display trial installed, enabled and opened this revision in both modes with disposable pet state. Both displayed the original egg and care panel; declined Ward package queries remained explicitly unavailable. These current render/startup checks do not rerun the historical care, roaming or audio matrices below, and never load the user's pet.
+A fresh external private-display trial installed, enabled and opened this revision in both modes with disposable pet state. Both displayed the original egg and care panel; declined normal-mode package queries remained explicitly unavailable. A live YOLO rehearsal then verified clone, explicit trust, enable, a successful package-update observation, natural hatching, feeding and the saved hunger value. It never loaded the user's pet. These checks do not rerun the historical roaming or audio matrices below.
 
 ## Paths and permissions
 
-The service takes its state directory from `shell.runtime.statePath` in both modes; the original save filenames and serialization stay unchanged. In Ward, persistent storage is mounted as the private worker home. In YOLO, the runtime provides private paths without changing the desktop shell's global home. `OMARCHY_PLUGIN_PATH` and `OMARCHY_PLUGIN_DATA` remain host-side exec argument tokens when those resources are admitted, not paths for the local save writer or sound decoder. They do not mount the rest of the host filesystem into the worker.
+The service takes its state directory from `runtime.statePath` in both modes; the original save filenames and serialization stay unchanged. Persistent storage is mounted as the private worker home in both modes. `OMARCHY_PLUGIN_PATH` and `OMARCHY_PLUGIN_DATA` remain host-side exec argument tokens when those resources are admitted, not paths for the local save writer or sound decoder. They do not mount the rest of the host filesystem into the worker.
 
 The manifest requests permissions; it does not approve them. Select `--allow-storage` to satisfy the required persistence request; denying it prevents activation of this revision. Select `--allow-audio-playback` separately to allow sounds. Neither capture permission is requested or needed. Declined playback has no reachable playback endpoint and the helper fails without a host stream. Ward permits two concurrent playback streams per plugin, with bounded buffering; stopping or revoking the plugin terminates its streams. Revoking storage removes access but retains saved data; reapproval restores access to the same pet identity. Ward's generic ephemeral-home behavior does not allow this storage-required revision to start without that grant. Package-query exec grants and notifications remain independent of playback.
 
-## Verification and remaining work
+## Historical verification and remaining work
+
+The following trials used earlier port/runtime revisions. Their results document those revisions; the current required-runtime checks are listed above and do not repeat every historical interaction.
 
 The updated PCM path passed a fresh private-display trial with the matching native runtime and staged adapter. The original `playSound("pet")` decoded its bundled asset at volume 0.5 and delivered nonzero samples to a private synthetic PipeWire output, with no host-exec grant. Two bar placements shared the one service; removing one left the other active. With playback declined, the same sound attempt created no audio backend and the synthetic output stayed silent. Revocation removed every tracked process in the denied trial. The rendered egg panel was inspected. No real speakers or microphone were used.
 

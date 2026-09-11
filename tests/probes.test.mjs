@@ -8,23 +8,23 @@ const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta
 
 // Execute the actual QML handler bodies, not a duplicate parser. Runtime
 // admission and live Process delivery are separate integration checks.
-function handler(id) {
-  const block = service.split(`    id: ${id}\n`)[1]?.split("\n  }\n")[0];
-  assert.ok(block, `missing ${id}`);
-  const body = block.match(/onExited: function\(exitCode\) \{([\s\S]*)\n    \}/)?.[1];
-  assert.ok(body, `missing ${id} exit handler`);
-  return (root, exitCode, stdout = "", stderr = "") => {
-    vm.runInNewContext(body, {
-      root, exitCode, updatesOut: { text: stdout }, updatesErr: { text: stderr },
-      orphansOut: { text: stdout }, orphansErr: { text: stderr }
-    }, { timeout: 100 });
+function handler(name) {
+  const block = service.match(new RegExp("  function " + name + "\\(\\) \\{[\\s\\S]*?\\n  \\}"))?.[0];
+  assert.ok(block, `missing ${name}`);
+  const body = block.match(/onFinished: result => \{([\s\S]*)\n    \}\}/)?.[1];
+  assert.ok(body, `missing ${name} completion handler`);
+  return (root, exitCode, stdout = "", stderr = "", status = "completed") => {
+    const scope = { ...root, result: { status, exitCode, stdout, stderr }, console: { warn() {} } };
+    vm.runInNewContext(`(function () { ${body}\n})()`, scope, { timeout: 100 });
+    root.pendingUpdates = scope.pendingUpdates;
+    root.orphanCount = scope.orphanCount;
   };
 }
 
 assert.match(service, /property int pendingUpdates: -1/);
 assert.match(service, /property int orphanCount: -1/);
-assert.match(service, /command: \["checkupdates"\]/);
-assert.match(service, /command: \["pacman", "-Qdtq"\]/);
+assert.match(service, /runtime\.exec\("checkupdates", \[\]/);
+assert.match(service, /runtime\.exec\("pacman", \["-Qdtq"\]/);
 assert.deepEqual(manifest.sandbox.requests.exec.checkupdates, {
   executable: "/usr/bin/checkupdates", tree: { end: "pending-updates" }
 });
@@ -33,8 +33,8 @@ assert.deepEqual(manifest.sandbox.requests.exec.pacman, {
   tree: { next: [{ arg: { kind: "exact", value: "-Qdtq" }, then: { end: "orphan-packages" } }] }
 });
 
-const updates = handler("updatesProc");
-const orphans = handler("orphansProc");
+const updates = handler("queryUpdates");
+const orphans = handler("queryOrphans");
 const root = { pendingUpdates: -1, orphanCount: -1 };
 updates(root, 1, "", "not admitted");
 orphans(root, 1, "", "not admitted");
@@ -47,6 +47,14 @@ for (const code of [1, 9, 124]) {
   orphans(root, code, "", "query failed");
   assert.deepEqual(root, { pendingUpdates: 2, orphanCount: 3 });
 }
+for (const status of ["denied", "unavailable", "failed", "cancelled"]) {
+  updates(root, 0, "", "", status);
+  orphans(root, 1, "", "", status);
+  assert.deepEqual(root, { pendingUpdates: 2, orphanCount: 3 });
+}
+updates(root, 0, {base64: "/w=="});
+orphans(root, 0, {base64: "/w=="});
+assert.deepEqual(root, { pendingUpdates: 2, orphanCount: 3 });
 updates(root, 2);
 orphans(root, 1);
 assert.deepEqual(root, { pendingUpdates: 0, orphanCount: 0 });
